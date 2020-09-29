@@ -24,7 +24,7 @@ interface TokenMigrator {
  * @notice The value feed is the emergent body made up of all value pools,
  * and all the assets stored in them as well as their holders themselves.
  * @dev Ownable so that later on it can be sent to a governance smart contract.
- * (This will only be done once VALUE has enough holders, so much so that an ecosystem has been created (t.b.d))
+ * (This will only be done once VALUE has enough holders, so much so that an ecosystem has been created (>1000 users)
  */
 contract ValueFeed is Ownable {
 
@@ -34,16 +34,20 @@ contract ValueFeed is Ownable {
     // Info of each user.
     struct UserInfo {
         uint256 amount;     // The amount of tokens in the value feed belonging to a specific user.
-        uint256 inProgress; // The amount of tokens owed by the value feed to the user.
+        uint256 inProgress; // The amount of tokens owed by the value feed to the user (rewarded every four weeks).
         uint256 meritScore; // The score which determines the value that the user brings to the system.
         uint256 lastReward; // The amount of points last awarded to the user.
         uint256 streak;     // The number of consecutive successful proposals made by the user (if applicable).
+        uint256 rewardRate; // The cumulative reward rate used to calculate the amount of VALUE earned every four weeks.
     }
+
+
 
     // Info of each pool.
     struct PoolInfo {
         IERC20 token;        // Address of the specific token contract stored in the current value pool.
-        address[] addresses; // Array containing all addresses contributing to this pool
+        uint256 value;       // The total monetary value (not the token) in this pool.
+        mapping (uint256 => address) addresses; // Each address in this pool
     }
 
     // The VALUE token
@@ -52,17 +56,17 @@ contract ValueFeed is Ownable {
     address public owner;
     TokenMigrator public migrator;
     // The maximum rate at which VALUE is minted every day.
-    // At the maximum rate, supply lasts 10 years.
+    // At the maximum rate, supply lasts 10 years. Note: we operate on a base of 1 = 1e18 (account for decimals)
     uint256 public constant MAX_MINT_RATE = 2.46575342465753e22;
     // The minimum rate at which VALUE is minted every day.
     // At the minimum rate, supply lasts 20 years.
     uint256 public constant MIN_MINT_RATE = 1.23287671232877e22;
-    // The rate of reward for voting procedures. Note: We operate on a base of 1 = 1e18.
-    uint256 public rateOfReward = 4.055e15;
     // VALUE tokens created per block.
-    uint256 public valuePerBlock;
+    uint256 public rateOfDistribution;
     // The time in seconds at which the value feed is first put up. Used in order to know when to distribute rewards.
     uint256 public startTime;
+    // The total amount of monetary value in the entire value feed
+    uint256 public totalValue = 0;
 
 
     // Info of each value pool in the feed.
@@ -98,10 +102,17 @@ contract ValueFeed is Ownable {
         feedInfo.push(FeedInfo({poolToken: _poolToken, addresses: _addresses}));
     }
 
+
+
+    /**
+     *
+     *
+     *
+     */
     function calculateRate(uint256 _pid, address _user) external view returns (uint256) {
-        uint256 amount;
-        //W.I.P
-        return amount;
+        UserInfo storage user = userInfo[_pid][_user];
+        uint256 rate = user.meritScore * ;
+        return rate;
     }
 
     /**
@@ -111,7 +122,10 @@ contract ValueFeed is Ownable {
      */
     function calculateReward(uint256 _pid, address _user) external view returns (uint256) {
         UserInfo storage user = userInfo[_pid][_user];
-        uint256 amount = (rateOfReward * user.amount) / 1e18;
+        if (user.meritScore == 0) {
+            amount = user.amount * ;
+        }
+        uint256 amount = (calculateRate(_pid, _user) * user.amount) / 1e18;
         return amount;
     }
 
@@ -122,7 +136,7 @@ contract ValueFeed is Ownable {
      */
     function calculateTotalReward(uint256 _pid, address _user) external view returns (uint256) {
         UserInfo storage user = userInfo[_pid][_user];
-        uint256 amount = (rateOfReward * user.amount) / 1e18;
+        uint256 amount = (calculateRate(_pid, _user) * user.amount) / 1e18;
         return amount + user.inProgress;
     }
 
