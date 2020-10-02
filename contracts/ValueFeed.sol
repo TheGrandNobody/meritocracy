@@ -20,7 +20,7 @@ interface TokenMigrator {
 }
 /**
  * @title A contract for the Value Feed
- * @author Nobody (that's me)
+ * @author Nobody (that's me!)
  * @notice The value feed is the emergent body made up of all value pools,
  * and all the assets stored in them as well as their holders themselves.
  * @dev Ownable so that later on it can be sent to a governance smart contract.
@@ -41,8 +41,6 @@ contract ValueFeed is Ownable {
         uint256 rewardRate; // The cumulative reward rate used to calculate the amount of VALUE earned every four weeks.
     }
 
-
-
     // Info of each pool.
     struct PoolInfo {
         IERC20 token;        // Address of the specific token contract stored in the current value pool.
@@ -61,7 +59,7 @@ contract ValueFeed is Ownable {
     // The minimum rate at which VALUE is minted every day.
     // At the minimum rate, supply lasts 20 years.
     uint256 public constant MIN_MINT_RATE = 1.23287671232877e22;
-    // VALUE tokens created per block.
+    // VALUE tokens created per block, initially starts at the mid point of its max and min.
     uint256 public rateOfDistribution;
     // The time in seconds at which the value feed is first put up. Used in order to know when to distribute rewards.
     uint256 public startTime;
@@ -90,6 +88,7 @@ contract ValueFeed is Ownable {
         owner = _owner;
         valuePerBlock = _valuePerBlock;
         startTime = block.timestamp;
+        rateOfDistribution = (MAX_MINT_RATE + MIN_MINT_RATE)/2;
     }
 
     /**
@@ -102,42 +101,23 @@ contract ValueFeed is Ownable {
         feedInfo.push(FeedInfo({poolToken: _poolToken, addresses: _addresses}));
     }
 
-
-
     /**
-     *
-     *
-     *
+     * @notice Returns the reward rate, to view it on the frontend
+     * @param _pid UserInfo index of the specified value pool
+     * @param _user ETH address of the specified user
      */
-    function calculateRate(uint256 _pid, address _user) external view returns (uint256) {
+    function findRate(uint256 _pid, address _user) external view returns (uint256) {
         UserInfo storage user = userInfo[_pid][_user];
-        uint256 rate = user.meritScore * ;
-        return rate;
+        return user.rewardRate;
     }
 
     /**
-     * @notice Calculates the reward for a given user address.
-     * @param _pid UserInfo index of the specified user
+     * @notice Calculates the (total) reward for a given user address.
+     * @param _pid UserInfo index of the specified value pool
      * @param _user ETH address of the specified user
      */
     function calculateReward(uint256 _pid, address _user) external view returns (uint256) {
         UserInfo storage user = userInfo[_pid][_user];
-        if (user.meritScore == 0) {
-            amount = user.amount * ;
-        }
-        uint256 amount = (calculateRate(_pid, _user) * user.amount) / 1e18;
-        return amount;
+        return (user.rewardRate * user.meritScore);
     }
-
-    /**
-     * @notice Calculates the total reward for a given user address at the end of the month.
-     * @param _pid UserInfo index of the specified user
-     * @param _user ETH address of the specified user
-     */
-    function calculateTotalReward(uint256 _pid, address _user) external view returns (uint256) {
-        UserInfo storage user = userInfo[_pid][_user];
-        uint256 amount = (calculateRate(_pid, _user) * user.amount) / 1e18;
-        return amount + user.inProgress;
-    }
-
 }
