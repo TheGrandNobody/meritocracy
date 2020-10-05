@@ -7,17 +7,7 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./ValueToken.sol";
 
-/**
- * Allows a value pool asset migration from one value pool to another.
- */
-interface TokenMigrator {
-    /**
-     * @param token The current value pool's token address.
-     * @return The new value pool's token address
-     * @dev Migrator should have full access to the caller's value pool token.
-     */
-    function migrate(IERC20 token) external returns (IERC20);
-}
+
 /**
  * @title A contract for the Value Feed
  * @author Nobody (that's me!)
@@ -52,7 +42,6 @@ contract ValueFeed is Ownable {
     ValueToken public value;
     // The dev address.
     address public owner;
-    TokenMigrator public migrator;
     // The maximum rate at which VALUE is minted every day.
     // At the maximum rate, supply lasts 10 years. Note: we operate on a base of 1 = 1e18 (account for decimals)
     uint256 public constant MAX_MINT_RATE = 2.46575342465753e22;
