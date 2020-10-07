@@ -20,7 +20,6 @@ contract ValueFeed is Ownable {
 
     // Info of each user.
     struct UserData {
-        uint256 amount;     // The amount of tokens in the value feed belonging to a specific user.
         uint256 inProgress; // The amount of tokens owed by the value feed to the user (rewarded every four weeks).
         uint256 meritScore; // The score which determines the value that the user brings to the system.
         uint256 lastReward; // The amount of points last awarded to the user.
@@ -49,7 +48,7 @@ contract ValueFeed is Ownable {
     // The time in seconds at which the value feed is first put up. Used in order to know when to distribute rewards.
     uint256 public startTime;
     // The total amount of monetary value in the entire value feed
-    uint256 public totalValue = 0;
+    uint256 public totalValue;
 
 
     // Info of each user that provides tokens to the feed.
@@ -58,7 +57,6 @@ contract ValueFeed is Ownable {
     mapping (address => ValuePool) public valuePools;
     // Contains each token address for which a value pool was created
     address[] tokens;
-
 
 
     event Deposit(address indexed user, uint256 amount);
@@ -90,11 +88,15 @@ contract ValueFeed is Ownable {
 
     /**
      * @notice Adds value (in the form of a token) to a value pool
-     * @param _address The address of the user adding value to the value pool
+     * @param _tokenAddress The address of the value pool's token's contract
+     * @param _userValue The amount of the token being added
      */
-    function addValue(address _address, uint256 _userValue) external {
-        valuePools[_address].totalValue += _userValue;
-        valuePools[_address].userValue[_address] += _userValue;
+    function deposit(address _tokenAddress, uint256 _userValue) external {
+        valuePools[_tokenAddress].totalValue += _userValue;
+        valuePools[_tokenAddress].userValue[msg.sender] += _userValue;
+
+        emit Deposit(msg.sender, _userValue);
+
     }
 
     /**
@@ -114,4 +116,5 @@ contract ValueFeed is Ownable {
         UserData storage user = userData[_user];
         return (user.rewardRate * user.meritScore);
     }
+
 }
