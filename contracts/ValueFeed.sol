@@ -1,7 +1,5 @@
 pragma solidity 0.7.0;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/EnumerableSet.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -19,10 +17,9 @@ import "./ValueToken.sol";
 contract ValueFeed is Ownable {
 
     using SafeMath for uint256;
-    using SafeERC20 for IERC20;
 
     // Info of each user.
-    struct UserInfo {
+    struct UserData {
         uint256 amount;     // The amount of tokens in the value feed belonging to a specific user.
         uint256 inProgress; // The amount of tokens owed by the value feed to the user (rewarded every four weeks).
         uint256 meritScore; // The score which determines the value that the user brings to the system.
@@ -33,9 +30,8 @@ contract ValueFeed is Ownable {
 
     // Info of each pool.
     struct ValuePool {
-        IERC20 token;        // Address of the specific token contract stored in the current value pool.
-        uint256 value;       // The total monetary value (not the token) in this pool.
-        mapping (uint256 => address) addresses; // Each address in this pool
+        uint256 totalValue;                     // The total monetary value (not the token) in this pool.
+        mapping (address => uint256) userValue; // Each address in this pool
     }
 
     // The VALUE token
@@ -56,10 +52,13 @@ contract ValueFeed is Ownable {
     uint256 public totalValue = 0;
 
 
-    // Info of each value pool in the feed.
-    FeedInfo[] public feedInfo;
     // Info of each user that provides tokens to the feed.
-    mapping (address => UserInfo) public userInfo;
+    mapping (address => UserData) public userData;
+    // Each value pool is mapped to its respective token address
+    mapping (address => ValuePool) public valuePools;
+    // Contains each token address for which a value pool was created
+    address[] tokens;
+
 
 
     event Deposit(address indexed user, uint256 amount);
@@ -81,32 +80,38 @@ contract ValueFeed is Ownable {
     }
 
     /**
-     * @notice Adds a new value pool to the feed (Owner only)
-     * @param _allocationShare The percentage that this pool occupies in relation to the entire value feed.
-     * @param _poolToken The specified token for the new value pool
+    * @notice Adds a token address for which a value pool was created
+    * @param _address The address of the token contract
+    */
+    function addToken(address _address) public onlyOwner {
+        tokens.push(_address);
+    }
+
+    /**
+     * @notice Adds value (in the form of a token) to a value pool
+     * @param _address
      * @dev Adding the same token twice will screw things up
      */
-    function add(IERC20 token, uint256 _value, ) public onlyOwner {
-        feedInfo.push(FeedInfo({token: _token, value: _value})); // May not work since mappings can't go into memory
+    function addValue(address _address, uint256 _userValue) external {
+        valuePools[_address].totalValue += _userValue;
+        valuePools[_address].userValue[_address] += _userValue;
     }
 
     /**
      * @notice Returns the reward rate, to view it on the frontend
-     * @param _pid UserInfo index of the specified value pool
      * @param _user ETH address of the specified user
      */
-    function findRate(uint256 _pid, address _user) external view returns (uint256) {
-        UserInfo storage user = userInfo[_pid][_user];
+    function viewRate(address _user) external view returns (uint256) {
+        UserData storage user = userData[_user];
         return user.rewardRate;
     }
 
     /**
      * @notice Calculates the (total) reward for a given user address.
-     * @param _pid UserInfo index of the specified value pool
      * @param _user ETH address of the specified user
      */
-    function calculateReward(uint256 _pid, address _user) external view returns (uint256) {
-        UserInfo storage user = userInfo[_pid][_user];
+    function calculateReward(address _user) external view returns (uint256) {
+        UserData storage user = userData[_user];
         return (user.rewardRate * user.meritScore);
     }
 }
