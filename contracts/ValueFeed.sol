@@ -32,7 +32,7 @@ contract ValueFeed is Ownable {
     }
 
     // Info of each pool.
-    struct PoolInfo {
+    struct ValuePool {
         IERC20 token;        // Address of the specific token contract stored in the current value pool.
         uint256 value;       // The total monetary value (not the token) in this pool.
         mapping (uint256 => address) addresses; // Each address in this pool
@@ -59,12 +59,12 @@ contract ValueFeed is Ownable {
     // Info of each value pool in the feed.
     FeedInfo[] public feedInfo;
     // Info of each user that provides tokens to the feed.
-    mapping (uint256 => mapping (address => UserInfo)) public userInfo;
+    mapping (address => UserInfo) public userInfo;
 
 
-    event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
-    event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
-    event EmergencyWithdraw(address indexed user, uint256 indexed pid, uint256 amount);
+    event Deposit(address indexed user, uint256 amount);
+    event Withdraw(address indexed user, uint256 amount);
+    event EmergencyWithdraw(address indexed user, uint256 amount);
 
     /**
      * Constructor: initiates the value feed smart contract.
@@ -86,8 +86,8 @@ contract ValueFeed is Ownable {
      * @param _poolToken The specified token for the new value pool
      * @dev Adding the same token twice will screw things up
      */
-    function add(address[]  _addresses, IERC20 _poolToken) public onlyOwner {
-        feedInfo.push(FeedInfo({poolToken: _poolToken, addresses: _addresses}));
+    function add(IERC20 token, uint256 _value, ) public onlyOwner {
+        feedInfo.push(FeedInfo({token: _token, value: _value})); // May not work since mappings can't go into memory
     }
 
     /**
