@@ -81,7 +81,8 @@ contract ValueFeed is Ownable {
 
     /**
     * @notice Adds a token address for which a value pool was created
-    * @param _address The address of the token contract
+    * @param _address The address of the value pool's token's contract
+    * @dev Owner only to prevent any DoS attacks
     */
     function addToken(address _address) public onlyOwner {
         tokens.push(_address);
@@ -89,8 +90,7 @@ contract ValueFeed is Ownable {
 
     /**
      * @notice Adds value (in the form of a token) to a value pool
-     * @param _address
-     * @dev Adding the same token twice will screw things up
+     * @param _address The address of the user adding value to the value pool
      */
     function addValue(address _address, uint256 _userValue) external {
         valuePools[_address].totalValue += _userValue;
