@@ -79,23 +79,22 @@ contract ValueFeed is Ownable {
 
     /**
     * @notice Adds a token address for which a value pool was created
-    * @param _address The address of the value pool's token's contract
+    * @param _tokenAddress The address of the value pool's token's contract
     * @dev Owner only to prevent any DoS attacks
     */
-    function addToken(address _address) public onlyOwner {
-        tokens.push(_address);
+    function addToken(address _tokenAddress) public onlyOwner {
+        tokens.push(_tokenAddress);
     }
 
     /**
-     * @notice Adds value (in the form of a token) to a value pool
+     * @notice Deposits a given amount to a value pool
      * @param _tokenAddress The address of the value pool's token's contract
-     * @param _userValue The amount of the token being added
      */
-    function deposit(address _tokenAddress, uint256 _userValue) external {
-        valuePools[_tokenAddress].totalValue += _userValue;
-        valuePools[_tokenAddress].userValue[msg.sender] += _userValue;
+    function deposit(address _tokenAddress) public {
+        emit Deposit(msg.sender, msg.value);
 
-        emit Deposit(msg.sender, _userValue);
+        valuePools[_tokenAddress].totalValue += msg.value;
+        valuePools[_tokenAddress].userValue[msg.sender] += msg.value;
 
     }
 
@@ -115,6 +114,18 @@ contract ValueFeed is Ownable {
     function calculateReward(address _user) external view returns (uint256) {
         UserData storage user = userData[_user];
         return (user.rewardRate * user.meritScore);
+    }
+
+    /**
+     * @notice Withdraws a given amount from a value pool
+     * @param _tokenAddress The address of the token contract who's value pool
+     * @param _amount The amount of tokens being withdrawn
+     */
+    function withdrawFromPool(address _tokenAddress, uint256 _amount) public {
+        require(valuePools[_tokenAddress].userValue[msg.sender] >= _amount, "Insufficient funds");
+        emit Withdrawal(msg.sender, _amount);
+        valuePools[_tokenAddress].totalValue -= _amount;
+        valuePools[_tokenAddress].userValue[msg.sender] -= _amount;
     }
 
 }
