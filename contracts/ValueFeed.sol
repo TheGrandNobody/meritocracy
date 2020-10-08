@@ -61,7 +61,7 @@ contract ValueFeed is Ownable {
 
     event Deposit(address indexed user, uint256 amount);
     event Withdraw(address indexed user, uint256 amount);
-    event EmergencyWithdraw(address indexed user, uint256 amount);
+    event Swap(address[] indexed tokens, uint256 amount);
 
     /**
      * Constructor: initiates the value feed smart contract.
@@ -128,6 +128,10 @@ contract ValueFeed is Ownable {
         valuePools[_tokenAddress].userValue[msg.sender] -= _amount;
     }
 
+    /**
+     * @notice Withdraws all tokens owned by a user from their respective value pools
+     * @param _user The ETH address of the specified user
+     */
     function withdrawAllOwned(address _user) public {
         for (i = 0; i < tokens.length; i++) {
             if (valuePools[tokens[i]].userValue[_user] != 0) {
@@ -135,5 +139,6 @@ contract ValueFeed is Ownable {
             }
         }
     }
+
 
 }
