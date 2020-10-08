@@ -40,9 +40,6 @@ contract ValueFeed is Ownable {
     // The maximum rate at which VALUE is minted every day.
     // At the maximum rate, supply lasts 10 years. Note: we operate on a base of 1 = 1e18 (account for decimals)
     uint256 public constant MAX_MINT_RATE = 2.46575342465753e22;
-    // The minimum rate at which VALUE is minted every day.
-    // At the minimum rate, supply lasts 20 years.
-    uint256 public constant MIN_MINT_RATE = 1.23287671232877e22;
     // VALUE tokens created per block, initially starts at the mid point of its max and min.
     uint256 public rateOfDistribution;
     // The time in seconds at which the value feed is first put up. Used in order to know when to distribute rewards.
@@ -74,7 +71,7 @@ contract ValueFeed is Ownable {
         owner = _owner;
         valuePerBlock = _valuePerBlock;
         startTime = block.timestamp;
-        rateOfDistribution = (MAX_MINT_RATE + MIN_MINT_RATE)/2;
+        rateOfDistribution = MAX_MINT_RATE / 2;
     }
 
     /**
@@ -140,5 +137,12 @@ contract ValueFeed is Ownable {
         }
     }
 
+    //function distributeRewards
+
+    //function discourageDistribution
+
+    //function encourageDistribution
+
+    //function 
 
 }
