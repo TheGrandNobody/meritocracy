@@ -128,4 +128,12 @@ contract ValueFeed is Ownable {
         valuePools[_tokenAddress].userValue[msg.sender] -= _amount;
     }
 
+    function withdrawAllOwned(address _user) public {
+        for (i = 0; i < tokens.length; i++) {
+            if (valuePools[tokens[i]].userValue[_user] != 0) {
+                withdrawFromPool(tokens[i], valuePools[tokens[i]].userValue[_user]);
+            }
+        }
+    }
+
 }
