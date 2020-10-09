@@ -5,7 +5,6 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./ValueToken.sol";
 
-
 /**
  * @title A contract for the Value Feed
  * @author Nobody (that's me!)
@@ -39,12 +38,17 @@ contract ValueFeed is Ownable {
     address public owner;
     // The maximum rate at which VALUE is minted every day.
     // At the maximum rate, supply lasts 10 years. Note: we operate on a base of 1 = 1e18 (account for decimals)
-    uint256 public constant MAX_MINT_RATE = 2.46575342465753e22;
+    uint256 public constant MAX_DISTRIBUTION_RATE = 2.46575342465753e22;
+    uint256 public constant MAX_COLLECTION_RATE = 4.93150684931506e21;
+    // The rate at which part of the rewards are taken from users in case consecutive ill behavior.
+    uint256 public rateOfCollection;
     // VALUE tokens created per block, initially starts at the mid point of its max and min.
     uint256 public rateOfDistribution;
+    // A numerical representation of the entire behavioral state of the Value Feed
+    uint8 public ebState;
     // The time in seconds at which the value feed is first put up. Used in order to know when to distribute rewards.
     uint256 public startTime;
-    // The total amount of monetary value in the entire value feed
+    // The total amount of monetary value in the entire value feed.
     uint256 public totalValue;
 
 
@@ -63,15 +67,15 @@ contract ValueFeed is Ownable {
     /**
      * Constructor: initiates the value feed smart contract.
      * @param _value The value token
-     * @param _devaddr The dev address
-     * @param _valuePerBlock The amount of VALUE tokens minted each block
+     * @param _owner The dev address
+     * @param _ebState The current economical-behavioral state of the Value Feed
      */
-    constructor(ValueToken _value, address _owner, uint256 _valuePerBlock) {
+    constructor(ValueToken _value, address _owner) {
         value = _value;
         owner = _owner;
-        valuePerBlock = _valuePerBlock;
         startTime = block.timestamp;
-        rateOfDistribution = MAX_MINT_RATE / 2;
+        rateOfDistribution = MAX_DISTRIBUTION_RATE / 2;
+        ebState = 100;
     }
 
     /**
@@ -121,6 +125,7 @@ contract ValueFeed is Ownable {
     function withdrawFromPool(address _tokenAddress, uint256 _amount) public {
         require(valuePools[_tokenAddress].userValue[msg.sender] >= _amount, "Insufficient funds");
         emit Withdrawal(msg.sender, _amount);
+
         valuePools[_tokenAddress].totalValue -= _amount;
         valuePools[_tokenAddress].userValue[msg.sender] -= _amount;
     }
@@ -137,9 +142,36 @@ contract ValueFeed is Ownable {
         }
     }
 
-    //function distributeRewards
+    /**
+     * @notice An incentive against ill behavior based on the economical-behavioral state of the Value Feed
+     */
+    function discourageDistribution() internal {
+        if (ebState > 0) {
+            ebState -= 1;
+        }
 
-    //function discourageDistribution
+        if (ebState == 90) {
+
+        } else if (ebState == 80) {
+
+        } else if (ebState == 70) {
+
+        } else if (ebState == 60) {
+
+        } else if (ebState == 50) {
+
+        } else if (ebState == 40) {
+
+        } else if (ebState == 30) {
+
+        } else if (ebState == 20) {
+
+        } else if (ebState == 10) {
+
+        } else if (ebState == 0) {
+
+        }
+    }
 
     //function encourageDistribution
 
