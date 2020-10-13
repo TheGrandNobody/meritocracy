@@ -1,9 +1,9 @@
 pragma solidity 0.7.0;
 
-import "@openzeppelin/contracts/utils/EnumerableSet.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./ValueToken.sol";
+import "./Swaps.sol";
 
 /**
  * @title A contract for the Value Feed
@@ -51,7 +51,6 @@ contract ValueFeed is Ownable {
     // The total amount of monetary value in the entire value feed.
     uint256 public totalValue;
 
-
     // Info of each user that provides tokens to the feed.
     mapping (address => UserData) public userData;
     // Each value pool is mapped to its respective token address
@@ -96,6 +95,7 @@ contract ValueFeed is Ownable {
 
         valuePools[_tokenAddress].totalValue += msg.value;
         valuePools[_tokenAddress].userValue[msg.sender] += msg.value;
+        totalValue += msg.value;
 
     }
 
@@ -128,6 +128,7 @@ contract ValueFeed is Ownable {
 
         valuePools[_tokenAddress].totalValue -= _amount;
         valuePools[_tokenAddress].userValue[msg.sender] -= _amount;
+        totalValue -= _amount;
     }
 
     /**
@@ -142,39 +143,40 @@ contract ValueFeed is Ownable {
         }
     }
 
-    /**
-     * @notice An incentive against ill behavior based on the economical-behavioral state of the Value Feed
-     */
-    function discourageDistribution() internal {
-        if (ebState > 0) {
-            ebState -= 1;
+    function updateRates(bool encourage) internal {
+        uint256 _ebState = ebState;
+        if (encourage && _ebState < 200) {
+            ebState++;
+        } else if (!encourage && _ebState > 0) {
+            ebState--;
         }
-
-        if (ebState == 90) {
-
-        } else if (ebState == 80) {
-
-        } else if (ebState == 70) {
-
-        } else if (ebState == 60) {
-
-        } else if (ebState == 50) {
-
-        } else if (ebState == 40) {
-
-        } else if (ebState == 30) {
-
-        } else if (ebState == 20) {
-
-        } else if (ebState == 10) {
-
-        } else if (ebState == 0) {
-
+        if (ebState % 3 == 0) {
+            rateOfDistribution = _calculateNewRate(!encourage, ebState, rateOfDistribution, MAX_DISTRIBUTION_RATE);
+            rateOfCollection = _calculateNewRate(encourage, ebState, rateOfCollection, MAX_COLLECTION_RATE);
         }
     }
 
-    //function encourageDistribution
 
-    //function 
+    function _calculateNewRate(bool encourage, uint256 ebState, uint256 previousRate, uint256 maxRate) internal
+    returns (uint256) {
+        uint256 newRate;
 
+        if (!encourage && previousRate < maxRate) {
+            newRate = (previousRate * (1e4 + abs(100 - ebState))) / 1e4;
+            if (newRate >= maxRate) {
+                newRate = maxRate;
+            }
+        } else if (encourage && previousRate > 0) {
+            newRate = (previousRate / (1e4 + abs(50 - ebState))) / 1e4;
+            if (newRate <= maxRate) {
+                newRate = maxRate;
+            }
+        }
+
+        return newRate;
+    }
+
+    function abs(int256 number) private pure returns (uint256) {
+        return number < 0 ? uint256(number * -1) : uint256(number);
+    }
 }
