@@ -63,16 +63,16 @@ contract ValueFeed is Ownable {
     event Swap(address[] indexed tokens, uint256 amount);
 
     /**
-     * Constructor: initiates the value feed smart contract.
+     * Constructor: initiates the value feed smart contract
      * @param _value The value token
-     * @param _owner The dev address
+     * @param _dev The dev address
      */
-    constructor(ValueToken _value, address _owner) {
+    constructor(ValueToken _value, address _dev) {
         value = _value;
-        owner = _owner;
+        dev = _dev;
         startTime = block.timestamp;
         rateOfDistribution = MAX_DISTRIBUTION_RATE / 2;
-        ebState = 100;
+        ebState = 150;
     }
 
     /**
@@ -88,7 +88,7 @@ contract ValueFeed is Ownable {
      * @notice Deposits a given amount to a value pool
      * @param _tokenAddress The address of the value pool's token's contract
      */
-    function deposit(address _tokenAddress) public {
+    function deposit(address _tokenAddress) public payable {
         emit Deposit(msg.sender, msg.value);
 
         valuePools[_tokenAddress].totalValue += msg.value;
@@ -97,8 +97,10 @@ contract ValueFeed is Ownable {
     }
 
     /**
-     * @notice Returns the reward rate, to view it on the frontend
+     * @notice Retrieves the quadri-weekly reward rate of a given user
+     * @dev Mainly for frontend usage
      * @param _user ETH address of the specified user
+     * @return The cumulative reward rate of the user
      */
     function viewRate(address _user) external view returns (uint256) {
         UserData storage user = userData[_user];
@@ -106,8 +108,9 @@ contract ValueFeed is Ownable {
     }
 
     /**
-     * @notice Calculates the (total) reward for a given user address.
+     * @notice Calculates the (total) reward for a given user address
      * @param _user ETH address of the specified user
+     * @return The total reward in VALUE owed to the user
      */
     function calculateReward(address _user) external view returns (uint256) {
         UserData storage user = userData[_user];
@@ -140,7 +143,12 @@ contract ValueFeed is Ownable {
         }
     }
 
-    function updateRates(bool encourage) internal {
+    /**
+     * @notice Updates the rate of collection and distribution in an encouraging or discouraging way
+     * @dev Only called by the E.A.I
+     * @param encourage The manner by which the E.A.I wishes to influence the rates
+     */
+    function updateRates(bool encourage) internal onlyOwner {
         uint256 _ebState = ebState;
         if (encourage && _ebState < 200) {
             ebState++;
@@ -148,30 +156,45 @@ contract ValueFeed is Ownable {
             ebState--;
         }
         if (ebState % 3 == 0) {
-            rateOfDistribution = _calculateNewRate(!encourage, ebState, rateOfDistribution, MAX_DISTRIBUTION_RATE);
-            rateOfCollection = _calculateNewRate(encourage, ebState, rateOfCollection, MAX_COLLECTION_RATE);
+            rateOfDistribution = _calculateSafeRate(!encourage, ebState, rateOfDistribution, MAX_DISTRIBUTION_RATE);
+            rateOfCollection = _calculateSafeRate(encourage, ebState, rateOfCollection, MAX_COLLECTION_RATE);
         }
     }
 
-
-    function _calculateNewRate(bool encourage, uint16 ebState, uint256 previousRate, uint256 maxRate) internal
+    /**
+     * @notice Safely recalculates a given rate (without allowing it to go below 0 or go above the set maximum),
+     * based on the economical behavioral state of the value feed
+     * @dev Helper function (works for any rate which is equally or inversely influenced by the ebState)
+     * @param encourage The manner by which the E.A.I wishes to influence the rates
+     * @param ebState The economical-behavioral state of the value feed
+     * @param currentRate The specified current rate
+     * @param maxRate The specified limit of the rate
+     * @return The newly recalculated rate
+     */
+    function _calculateSafeRate(bool encourage, uint16 ebState, uint256 currentRate, uint256 maxRate) internal pure
     returns (uint256) {
         uint256 newRate;
 
         if (!encourage && previousRate < maxRate) {
-            newRate = (previousRate * (1e4 + abs(100 - ebState))) / 1e4;
+            newRate = (currentRate * (1e4 + abs(150 - ebState))) / 1e4;
             if (newRate >= maxRate) {
                 newRate = maxRate;
             }
         } else if (encourage && previousRate > 0) {
-            newRate = (previousRate / (1e4 + abs(50 - ebState))) / 1e4;
-            if (newRate <= maxRate) {
-                newRate = maxRate;
+            newRate = (currentRate / (1e4 + abs(75 - ebState))) / 1e4;
+            if (newRate <= 0) {
+                newRate = 0;
             }
         }
         return newRate;
     }
 
+    /**
+     * @notice Takes the absolute value of a given number
+     * @dev Helper function
+     * @param number The specified number
+     * @return The absolute value of the number
+     */
     function abs(int256 number) private pure returns (uint256) {
         return number < 0 ? uint256(number * -1) : uint256(number);
     }
