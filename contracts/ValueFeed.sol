@@ -166,22 +166,22 @@ contract ValueFeed is Ownable {
      * based on the economical behavioral state of the value feed
      * @dev Helper function (works for any rate which is equally or inversely influenced by the ebState)
      * @param encourage The manner by which the E.A.I wishes to influence the rates
-     * @param ebState The economical-behavioral state of the value feed
+     * @param _ebState The economical-behavioral state of the value feed
      * @param currentRate The specified current rate
      * @param maxRate The specified limit of the rate
      * @return The newly recalculated rate
      */
-    function _calculateSafeRate(bool encourage, uint16 ebState, uint256 currentRate, uint256 maxRate) internal pure
+    function _calculateSafeRate(bool encourage, uint16 _ebState, uint256 currentRate, uint256 maxRate) internal pure
     returns (uint256) {
         uint256 newRate;
 
-        if (!encourage && previousRate < maxRate) {
-            newRate = (currentRate * (1e4 + abs(150 - ebState))) / 1e4;
+        if (!encourage && currentRate < maxRate) {
+            newRate = (currentRate * (1e4 + abs(150 - _ebState))) / 1e4;
             if (newRate >= maxRate) {
                 newRate = maxRate;
             }
-        } else if (encourage && previousRate > 0) {
-            newRate = (currentRate / (1e4 + abs(75 - ebState))) / 1e4;
+        } else if (encourage && currentRate > 0) {
+            newRate = (currentRate / (1e4 + abs(75 - _ebState))) / 1e4;
             if (newRate <= 0) {
                 newRate = 0;
             }
