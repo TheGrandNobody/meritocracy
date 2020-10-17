@@ -38,6 +38,7 @@ contract ValueFeed is Ownable {
     // The maximum rate at which VALUE is minted every day.
     // At the maximum rate, supply lasts 10 years. Note: we operate on a base of 1 = 1e18 (account for decimals)
     uint256 public constant MAX_DISTRIBUTION_RATE = 2.46575342465753e22;
+    // The maximum rate at which VALUE is collected.
     uint256 public constant MAX_COLLECTION_RATE = 4.93150684931506e21;
     // The rate at which part of the rewards are taken from users in case consecutive ill behavior.
     uint256 public rateOfCollection;
@@ -65,11 +66,10 @@ contract ValueFeed is Ownable {
     /**
      * Constructor: initiates the value feed smart contract
      * @param _value The value token
-     * @param _dev The dev address
      */
-    constructor(ValueToken _value, address _dev) {
+    constructor(ValueToken _value) {
         value = _value;
-        dev = _dev;
+        dev = msg.sender;
         startTime = block.timestamp;
         rateOfDistribution = MAX_DISTRIBUTION_RATE / 2;
         ebState = 150;
@@ -88,7 +88,7 @@ contract ValueFeed is Ownable {
      * @notice Deposits a given amount to a value pool
      * @param _tokenAddress The address of the value pool's token's contract
      */
-    function deposit(address _tokenAddress) public payable {
+    function deposit(address _tokenAddress, uint) public payable {
         emit Deposit(msg.sender, msg.value);
 
         valuePools[_tokenAddress].totalValue += msg.value;
@@ -148,7 +148,7 @@ contract ValueFeed is Ownable {
      * @dev Only called by the E.A.I
      * @param encourage The manner by which the E.A.I wishes to influence the rates
      */
-    function updateRates(bool encourage) internal onlyOwner {
+    function _updateRates(bool encourage) internal onlyOwner {
         uint256 _ebState = ebState;
         if (encourage && _ebState < 200) {
             ebState++;

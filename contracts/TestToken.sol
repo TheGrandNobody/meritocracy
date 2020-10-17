@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 
 // ValueToken with Governance.
-contract ValueToken is ERC20("Value", "VALUE"), Ownable {
+contract TestToken is ERC20("test", "TEST"), Ownable {
 
     /**
      * @notice Creates a specific sum of tokens to an owner address.
