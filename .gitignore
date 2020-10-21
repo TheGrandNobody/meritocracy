@@ -2,4 +2,4 @@
 .env
 .gitignore
 .idea
-.vscode
+.vscode.DS_Store
