@@ -2,6 +2,8 @@ pragma solidity 0.7.0;
 
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "./ValueToken.sol";
 
 /**
@@ -33,19 +35,22 @@ contract ValueFeed is Ownable {
 
     // The VALUE token
     ValueToken public value;
-    // The dev address.
+    // The dev address
     address public dev;
+    // The Uniswap Router
+    IUniswapV2Router02 private UniswapV2Router02;
     // The maximum rate at which VALUE is minted every day.
+    address private constant UNISWAP_ROUTER_ADDRESS = 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D;
     // At the maximum rate, supply lasts 10 years. Note: we operate on a base of 1 = 1e18 (account for decimals)
     uint256 public constant MAX_DISTRIBUTION_RATE = 2.46575342465753e22;
     // The maximum rate at which VALUE is collected.
     uint256 public constant MAX_COLLECTION_RATE = 4.93150684931506e21;
-    // The rate at which part of the rewards are taken from users in case consecutive ill behavior.
+    // The rate at which part of the rewards are taken from users in case of consecutive ill behavior
     uint256 public rateOfCollection;
     // VALUE tokens created per block, initially starts at the mid point of its max and min.
     uint256 public rateOfDistribution;
     // A numerical representation of the entire behavioral state of the Value Feed
-    uint16 public ebState;
+    uint16 public ebState = 150;
     // The time in seconds at which the value feed is first put up. Used in order to know when to distribute rewards.
     uint256 public startTime;
     // The total amount of monetary value in the entire value feed.
@@ -72,7 +77,7 @@ contract ValueFeed is Ownable {
         dev = msg.sender;
         startTime = block.timestamp;
         rateOfDistribution = MAX_DISTRIBUTION_RATE / 2;
-        ebState = 150;
+        UniswapV2Router02 = IUniswapV2Router02(UNISWAP_ROUTER_ADDRESS);
     }
 
     /**
@@ -87,13 +92,15 @@ contract ValueFeed is Ownable {
     /**
      * @notice Deposits a given amount to a value pool
      * @param _tokenAddress The address of the value pool's token's contract
+     * @param _amount The specified amount of tokens being deposited
      */
-    function deposit(address _tokenAddress, uint) public payable {
-        emit Deposit(msg.sender, msg.value);
+    function deposit(address _tokenAddress, uint256 _amount) public payable {
+        ValuePool storage p = valuePools[_tokenAddress];
+        emit Deposit(msg.sender, _amount);
 
-        valuePools[_tokenAddress].totalValue += msg.value;
-        valuePools[_tokenAddress].userValue[msg.sender] += msg.value;
-        totalValue += msg.value;
+        p.totalValue += _amount;
+        p.userValue[msg.sender] += _amount;
+        totalValue += _amount;
     }
 
     /**
@@ -167,21 +174,21 @@ contract ValueFeed is Ownable {
      * @dev Helper function (works for any rate which is equally or inversely influenced by the ebState)
      * @param encourage The manner by which the E.A.I wishes to influence the rates
      * @param _ebState The economical-behavioral state of the value feed
-     * @param currentRate The specified current rate
-     * @param maxRate The specified limit of the rate
+     * @param _currentRate The specified current rate
+     * @param _maxRate The specified limit of the rate
      * @return The newly recalculated rate
      */
-    function _calculateSafeRate(bool encourage, uint16 _ebState, uint256 currentRate, uint256 maxRate) internal pure
+    function _calculateSafeRate(bool encourage, uint16 _ebState, uint256 _currentRate, uint256 _maxRate) internal pure
     returns (uint256) {
         uint256 newRate;
 
-        if (!encourage && currentRate < maxRate) {
-            newRate = (currentRate * (1e4 + abs(150 - _ebState))) / 1e4;
-            if (newRate >= maxRate) {
-                newRate = maxRate;
+        if (!encourage && _currentRate < _maxRate) {
+            newRate = (_currentRate * (1e4 + abs(150 - _ebState))) / 1e4;
+            if (newRate >= _maxRate) {
+                newRate = _maxRate;
             }
-        } else if (encourage && currentRate > 0) {
-            newRate = (currentRate / (1e4 + abs(75 - _ebState))) / 1e4;
+        } else if (encourage && _currentRate > 0) {
+            newRate = (_currentRate / (1e4 + abs(75 - _ebState))) / 1e4;
             if (newRate <= 0) {
                 newRate = 0;
             }
@@ -192,10 +199,21 @@ contract ValueFeed is Ownable {
     /**
      * @notice Takes the absolute value of a given number
      * @dev Helper function
-     * @param number The specified number
+     * @param _number The specified number
      * @return The absolute value of the number
      */
-    function abs(int256 number) private pure returns (uint256) {
-        return number < 0 ? uint256(number * -1) : uint256(number);
+    function abs(int256 _number) private pure returns (uint256) {
+        return _number < 0 ? uint256(_number * -1) : uint256(_number);
     }
+
+    /**
+     * @notice Approves withdrawal of a given amount of a given ERC20 token by the Uniswap Router
+     * @dev Necessary for any Uniswap-related value pool operations
+     * @param _tokenAddress The specified address of the ERC20 token
+     * @param _amount The specified maximum amount of tokens allowed to be withdrawn by the Router
+     */
+    function approve(address _tokenAddress, uint256 _amount) private {
+        ERC20(_tokenAddress).approve(UNISWAP_ROUTER_ADDRESS, _amount);
+    }
+
 }

@@ -4,7 +4,13 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 
-// ValueToken with Governance.
+/**
+ * @title A contract for the Value Token
+ * @author Nobody (that's me!)
+ * @notice The value token is the governance token of the value feed, an economic incentive tool,
+ * and a means to reward users for their performance
+ * @dev Ownable so that later on it can be sent to a governance smart contract.
+ */
 contract ValueToken is ERC20("Value", "VALUE"), Ownable {
 
     /**
@@ -15,5 +21,5 @@ contract ValueToken is ERC20("Value", "VALUE"), Ownable {
     function mint(address _to, uint256 _amount) public onlyOwner {
         _mint(_to, _amount);
     }
-
+    
 }
