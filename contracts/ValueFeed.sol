@@ -121,7 +121,7 @@ contract ValueFeed is Ownable {
      */
     function calculateReward(address _user) external view returns (uint256) {
         UserData storage user = userData[_user];
-        return (user.rewardRate * user.meritScore);
+        return user.rewardRate.mul(user.meritScore);
     }
 
     /**
@@ -183,12 +183,12 @@ contract ValueFeed is Ownable {
         uint256 newRate;
 
         if (!encourage && _currentRate < _maxRate) {
-            newRate = (_currentRate * (1e4 + abs(150 - _ebState))) / 1e4;
+            newRate = _currentRate.mul(1e4 + abs(150 - _ebState)).div(1e4);
             if (newRate >= _maxRate) {
                 newRate = _maxRate;
             }
         } else if (encourage && _currentRate > 0) {
-            newRate = (_currentRate / (1e4 + abs(75 - _ebState))) / 1e4;
+            newRate = _currentRate.div(1e4 + abs(75 - _ebState)).div(1e4);
             if (newRate <= 0) {
                 newRate = 0;
             }
@@ -203,7 +203,7 @@ contract ValueFeed is Ownable {
      * @return The absolute value of the number
      */
     function abs(int256 _number) private pure returns (uint256) {
-        return _number < 0 ? uint256(_number * -1) : uint256(_number);
+        return _number < 0 ? uint256(_number * (-1)) : uint256(_number);
     }
 
     /**
@@ -213,7 +213,21 @@ contract ValueFeed is Ownable {
      * @param _amount The specified maximum amount of tokens allowed to be withdrawn by the Router
      */
     function approve(address _tokenAddress, uint256 _amount) private {
-        ERC20(_tokenAddress).approve(UNISWAP_ROUTER_ADDRESS, _amount);
+        IERC20(_tokenAddress).approve(UNISWAP_ROUTER_ADDRESS, _amount);
     }
 
+    function swapTokensForETH(address _tokenAddress) public onlyOwner {
+        address[] memory path = new address[](2);
+        path[0] = _tokenAddress;
+        path[1] = UniswapV2Router02.WETH();
+
+        uint256 _amount = valuePools[_tokenAddress].totalValue;
+        require(IERC20(_tokenAddress).approve(UNISWAP_ROUTER_ADDRESS, _amount), 'approve failed.');
+
+        UniswapV2Router02.swapExactTokensForETH(_amount, 
+                                                UniswapV2Router02.getAmountsOut(_amount, path)[1], path, address(this),
+                                                block.timestamp.add(15));
+
+    }
+    
 }
