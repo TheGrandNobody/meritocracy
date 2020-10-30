@@ -2,9 +2,9 @@ pragma solidity 0.7.0;
 
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
-import "./ValueToken.sol";
+import "./governance/ValueToken.sol";
 
 /**
  * @title A contract for the Value Feed
@@ -76,7 +76,7 @@ contract ValueFeed is Ownable {
         value = _value;
         dev = msg.sender;
         startTime = block.timestamp;
-        rateOfDistribution = MAX_DISTRIBUTION_RATE / 2;
+        rateOfDistribution = MAX_DISTRIBUTION_RATE.div(2);
         UniswapV2Router02 = IUniswapV2Router02(UNISWAP_ROUTER_ADDRESS);
     }
 
@@ -90,7 +90,7 @@ contract ValueFeed is Ownable {
     }
 
     /**
-     * @notice Deposits a given amount to a value pool
+     * @notice Deposits a given amount of tokens to a value pool
      * @param _tokenAddress The address of the value pool's token's contract
      * @param _amount The specified amount of tokens being deposited
      */
@@ -98,9 +98,9 @@ contract ValueFeed is Ownable {
         ValuePool storage p = valuePools[_tokenAddress];
         emit Deposit(msg.sender, _amount);
 
-        p.totalValue += _amount;
-        p.userValue[msg.sender] += _amount;
-        totalValue += _amount;
+        p.totalValue.add(_amount);
+        p.userValue[msg.sender].add(_amount);
+        totalValue.add(_amount);
     }
 
     /**
@@ -133,9 +133,9 @@ contract ValueFeed is Ownable {
         require(valuePools[_tokenAddress].userValue[msg.sender] >= _amount, "Insufficient funds");
         emit Withdraw(msg.sender, _amount);
 
-        valuePools[_tokenAddress].totalValue -= _amount;
-        valuePools[_tokenAddress].userValue[msg.sender] -= _amount;
-        totalValue -= _amount;
+        valuePools[_tokenAddress].totalValue.sub(_amount);
+        valuePools[_tokenAddress].userValue[msg.sender].sub(_amount);
+        totalValue.sub(_amount);
     }
 
     /**
@@ -144,7 +144,7 @@ contract ValueFeed is Ownable {
      */
     function withdrawAllOwned(address _user) public {
         for (uint256 i = 0; i < tokens.length; i++) {
-            if (valuePools[tokens[i]].userValue[_user] != 0) {
+            if (valuePools[tokens[i]].userValue[_user] > 0) {
                 withdrawFromPool(tokens[i], valuePools[tokens[i]].userValue[_user]);
             }
         }
