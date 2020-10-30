@@ -30,6 +30,7 @@ contract ValueFeed is Ownable {
     /// @notice Info of each pool.
     struct ValuePool {
         uint256 totalValue;                     // The total monetary value (not the token) in this pool.
+
         mapping (address => uint256) userValue; // Each address in this pool
     }
 

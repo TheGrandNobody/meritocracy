@@ -13,6 +13,9 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  */
 contract ValueToken is ERC20("Value", "VALUE"), Ownable {
 
+    /// @notice A record of all delegates
+    mapping (address => uint256) public delegates;
+
     /**
      * @notice Creates a specific sum of tokens to an owner address.
      * @param _to The specified owner address
@@ -22,5 +25,4 @@ contract ValueToken is ERC20("Value", "VALUE"), Ownable {
         _mint(_to, _amount);
     }
     
-
 }
