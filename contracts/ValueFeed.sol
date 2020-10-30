@@ -18,7 +18,7 @@ contract ValueFeed is Ownable {
 
     using SafeMath for uint256;
 
-    // Info of each user.
+    /// @notice Info of each user.
     struct UserData {
         uint256 inProgress; // The amount of tokens owed by the value feed to the user (rewarded every four weeks).
         uint256 meritScore; // The score which determines the value that the user brings to the system.
@@ -27,7 +27,7 @@ contract ValueFeed is Ownable {
         uint256 rewardRate; // The cumulative reward rate used to calculate the amount of VALUE earned every four weeks.
     }
 
-    // Info of each pool.
+    /// @notice Info of each pool.
     struct ValuePool {
         uint256 totalValue;                     // The total monetary value (not the token) in this pool.
         mapping (address => uint256) userValue; // Each address in this pool
