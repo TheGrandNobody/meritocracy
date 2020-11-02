@@ -142,7 +142,7 @@ contract ValueFeed is Ownable {
      * @param _amount The amount of tokens being withdrawn
      */
     function withdrawFromPool(address _tokenAddress, uint256 _amount) public {
-        require(valuePools[_tokenAddress].userValue[msg.sender] >= _amount, "Insufficient funds");
+        require(valuePools[_tokenAddress].userValue[msg.sender] >= _amount, "Insufficient funds.");
         emit Withdraw(msg.sender, _amount);
 
         valuePools[_tokenAddress].totalValue.sub(_amount);
@@ -165,18 +165,18 @@ contract ValueFeed is Ownable {
     /**
      * @notice Updates the rate of collection and distribution in an encouraging or discouraging way
      * @dev Only called by the E.A.I
-     * @param encourage The manner by which the E.A.I wishes to influence the rates
+     * @param _encourage The manner by which the E.A.I wishes to influence the rates
      */
-    function _updateRates(bool encourage) internal onlyOwner {
+    function _updateRates(bool _encourage) internal onlyOwner {
         uint256 _ebState = ebState;
-        if (encourage && _ebState < 200) {
+        if (_encourage && _ebState < 200) {
             ebState++;
-        } else if (!encourage && _ebState > 0) {
+        } else if (!_encourage && _ebState > 0) {
             ebState--;
         }
         if (ebState % 3 == 0) {
-            rateOfDistribution = _calculateSafeRate(!encourage, ebState, rateOfDistribution, MAX_DISTRIBUTION_RATE);
-            rateOfCollection = _calculateSafeRate(encourage, ebState, rateOfCollection, MAX_COLLECTION_RATE);
+            rateOfDistribution = _calculateSafeRate(!_encourage, ebState, rateOfDistribution, MAX_DISTRIBUTION_RATE);
+            rateOfCollection = _calculateSafeRate(_encourage, ebState, rateOfCollection, MAX_COLLECTION_RATE);
         }
     }
 
@@ -184,22 +184,22 @@ contract ValueFeed is Ownable {
      * @notice Safely recalculates a given rate (without allowing it to go below 0 or go above the set maximum),
      * based on the economical behavioral state of the value feed
      * @dev Helper function (works for any rate which is equally or inversely influenced by the ebState)
-     * @param encourage The manner by which the E.A.I wishes to influence the rates
+     * @param _encourage The manner by which the E.A.I wishes to influence the rates
      * @param _ebState The economical-behavioral state of the value feed
      * @param _currentRate The specified current rate
      * @param _maxRate The specified limit of the rate
      * @return The newly recalculated rate
      */
-    function _calculateSafeRate(bool encourage, uint16 _ebState, uint256 _currentRate, uint256 _maxRate) internal pure
+    function _calculateSafeRate(bool _encourage, uint16 _ebState, uint256 _currentRate, uint256 _maxRate) internal pure
     returns (uint256) {
         uint256 newRate;
 
-        if (!encourage && _currentRate < _maxRate) {
+        if (!_encourage && _currentRate < _maxRate) {
             newRate = _currentRate.mul(1e4 + abs(150 - _ebState)).div(1e4);
             if (newRate >= _maxRate) {
                 newRate = _maxRate;
             }
-        } else if (encourage && _currentRate > 0) {
+        } else if (_encourage && _currentRate > 0) {
             newRate = _currentRate.div(1e4 + abs(75 - _ebState)).div(1e4);
             if (newRate <= 0) {
                 newRate = 0;
@@ -208,14 +208,19 @@ contract ValueFeed is Ownable {
         return newRate;
     }
 
-    /**
-     * @notice Takes the absolute value of a given number
-     * @dev Helper function
-     * @param _number The specified number
-     * @return The absolute value of the number
-     */
-    function abs(int256 _number) private pure returns (uint256) {
-        return _number < 0 ? uint256(_number * (-1)) : uint256(_number);
+    
+    function swapTokensForETH(address _tokenAddress) public onlyOwner {
+        address[] memory path = new address[](2);
+        path[0] = _tokenAddress;
+        path[1] = UniswapV2Router02.WETH();
+
+        uint256 _amount = valuePools[_tokenAddress].totalValue;
+        require(IERC20(_tokenAddress).approve(UNISWAP_ROUTER_ADDRESS, _amount), 'Approve failed.');
+
+        UniswapV2Router02.swapExactTokensForETH(_amount, 
+                                                UniswapV2Router02.getAmountsOut(_amount, path)[1], path, address(this),
+                                                block.timestamp.add(15));
+
     }
 
     /**
@@ -228,18 +233,14 @@ contract ValueFeed is Ownable {
         IERC20(_tokenAddress).approve(UNISWAP_ROUTER_ADDRESS, _amount);
     }
 
-    function swapTokensForETH(address _tokenAddress) public onlyOwner {
-        address[] memory path = new address[](2);
-        path[0] = _tokenAddress;
-        path[1] = UniswapV2Router02.WETH();
-
-        uint256 _amount = valuePools[_tokenAddress].totalValue;
-        require(IERC20(_tokenAddress).approve(UNISWAP_ROUTER_ADDRESS, _amount), 'approve failed.');
-
-        UniswapV2Router02.swapExactTokensForETH(_amount, 
-                                                UniswapV2Router02.getAmountsOut(_amount, path)[1], path, address(this),
-                                                block.timestamp.add(15));
-
+    /**
+     * @notice Takes the absolute value of a given number
+     * @dev Helper function
+     * @param _number The specified number
+     * @return The absolute value of the number
+     */
+    function abs(int256 _number) private pure returns (uint256) {
+        return _number < 0 ? uint256(_number * (-1)) : uint256(_number);
     }
     
 }
