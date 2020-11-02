@@ -35,7 +35,7 @@ contract ValueFeed is Ownable {
      */
     struct ValuePool {
         uint256 totalValue;                     // The total monetary value (not the token) in this pool
-
+        bool swapped;
         mapping (address => uint256) userValue; // Each address in this pool
     }
 
@@ -147,6 +147,7 @@ contract ValueFeed is Ownable {
      */
     function withdrawFromPool(address _tokenAddress, uint256 _amount) public {
         ValuePool storage valuePool = valuePools[_tokenAddress];
+        require(valuePool.swapped, "Original assets currently in use");
         require(valuePool.userValue[msg.sender] >= _amount, "Insufficient funds.");
         emit Withdraw(msg.sender, _tokenAddress, _amount);
 
@@ -213,8 +214,12 @@ contract ValueFeed is Ownable {
         return newRate;
     }
 
-    
-    function swapTokensForETH(address _tokenAddress) public onlyOwner {
+    /**
+     * @notice Swaps a value pool's reserves for a given token
+     * @param _tokenAddress The specified token address for the UniSwapV2Router02 to use for swapping
+     * @param _swapBack Boolean specifying whether the reserves are being swapped back to their original asset
+     */
+    function swapTokensForETH(address _tokenAddress, bool _swapBack) public onlyOwner {
         address[] memory path = new address[](2);
         path[0] = _tokenAddress;
         path[1] = UniswapV2Router02.WETH();
@@ -222,13 +227,38 @@ contract ValueFeed is Ownable {
         ValuePool storage valuePool = valuePools[_tokenAddress];
         uint256 _amount = valuePool.totalValue;
         require(IERC20(_tokenAddress).approve(UNISWAP_ROUTER_ADDRESS, _amount), 'Approve failed.');
-
-        UniswapV2Router02.swapExactTokensForETH(_amount, 
-                                                UniswapV2Router02.getAmountsOut(_amount, path)[1], path, address(this),
-                                                block.timestamp.add(15));
+        if (swapBack) {
+            require(valuePool.swapped, "Reserves intact: swapping not necessary");
+        } else {
+            require(!valuePool.swapped, "Reserves already in use");
+        }
 
         emit Swap(path, _amount);
 
+        UniswapV2Router02.swapExactTokensForETH(_amount, UniswapV2Router02.getAmountsOut(_amount, path)[1], path, address(this),
+                                                block.timestamp.add(15));
+        valuePool.swapped = !_swapBack;
+    }
+
+    /**
+     * @notice Swaps a value pool's reserves for a given token
+     * @param path The specified array of token addresses for the UniSwapV2Router02 to use for swapping
+     * @param _swapBack Boolean specifying whether the reserves are being swapped back to their original asset
+     */
+    function swapTokensForToken(address[] _path, bool _swapBack) public onlyOwner {
+        ValuePool storage valuePool = valuePools[_path[0]];
+        uint256 _amount = valuePool.totalValue;
+        require(IERC20(path[0]).approve(UNISWAP_ROUTER_ADDRESS, _amount), 'Approve failed.');
+        if (swapBack) {
+            require(valuePool.swapped, "Reserves intact: swapping not necessary");
+        } else {
+            require(!valuePool.swapped, "Reserves already in use");
+        }
+        emit Swap(_path, _amount);
+
+        UniswapV2Router02.swapExactTokensForToken(_amount, UniswapV2Router02.getAmountsOut(_amount, _path)[_path.length.sub(1)], 
+                                                  _path, address(this),block.timestamp.add(15));
+        valuePool.swapped = !_swapBack;
     }
 
     /**
