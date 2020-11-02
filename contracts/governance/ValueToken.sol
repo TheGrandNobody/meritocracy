@@ -23,7 +23,24 @@ contract ValueToken is ERC20("Value", "VALUE"), Ownable {
      */
     mapping (address => address) public delegates;
 
-    function delegate(address _delegator, address _delegatee)
+    
+    bytes32 public constant EIP_DOMAIN_TYPEHASH = keccak256("EIPDomain(string ))
+
+    bytes32 public constant DELEGATION_STRUCT_TYPEHASH = 
+
+    event DelegateUpdated(address indexed delegator, address indexed oldDelegatee, address indexed newDelegatee);
+
+    /**
+     * @notice Delegates a user's (msg.sender) votes to a given user
+     * @param _newDelegatee The specified user
+     */
+    function delegate(address _newDelegatee) public {
+        address oldDelegatee = delegates[msg.sender];
+        delegates[msg.sender] = _newDelegatee;
+
+        emit DelegateUpdated(msg.sender, oldDelegatee, _newDelegatee);
+        
+    }
 
     /**
      * @notice Creates a specific sum of tokens to an owner address.

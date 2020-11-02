@@ -18,55 +18,60 @@ contract ValueFeed is Ownable {
 
     using SafeMath for uint256;
 
-    /// @notice Info of each user.
+    /**
+     * @notice Info of each user
+     */
     struct UserData {
-        uint256 inProgress;   // The amount of tokens owed by the value feed to the user (rewarded every four weeks).
-        uint256 meritScore;   // The score which determines the value that the user brings to the system.
-        uint256 lastReward;   // The amount of points last awarded to the user.
-        uint256 streak;       // The number of consecutive successful proposals made by the user (if applicable).
-        uint256 rewardRate;   // The cumulative reward rate used to calculate the amount of VALUE earned every four weeks.
+        uint256 inProgress;   // The amount of tokens owed by the value feed to the user (rewarded every four weeks)
+        uint256 meritScore;   // The score which determines the value that the user brings to the system
+        uint256 lastReward;   // The amount of points last awarded to the user
+        uint256 streak;       // The number of consecutive successful proposals made by the user (if applicable)
+        uint256 rewardRate;   // The cumulative reward rate used to calculate the amount of VALUE earned every four weeks
     }
 
-    /// @notice Info of each pool.
+    
+    /**
+     * @notice Info of each pool
+     */
     struct ValuePool {
-        uint256 totalValue;                     // The total monetary value (not the token) in this pool.
+        uint256 totalValue;                     // The total monetary value (not the token) in this pool
 
         mapping (address => uint256) userValue; // Each address in this pool
     }
 
-    // The VALUE token
+    /// @notice The VALUE token
     ValueToken public value;
-    // The dev address
+    /// @notice The dev address
     address public dev;
-    // The Uniswap Router
+    /// @notice The Uniswap Router
     IUniswapV2Router02 private UniswapV2Router02;
-    // The maximum rate at which VALUE is minted every day.
+    /// @notice The maximum rate at which VALUE is minted every day.
     address private constant UNISWAP_ROUTER_ADDRESS = 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D;
-    // At the maximum rate, supply lasts 10 years. Note: we operate on a base of 1 = 1e18 (account for decimals)
+    /// @notice At the maximum rate, supply lasts 10 years. Note: we operate on a base of 1 = 1e18 (account for decimals)
     uint256 public constant MAX_DISTRIBUTION_RATE = 2.46575342465753e22;
-    // The maximum rate at which VALUE is collected.
+    /// @notice The maximum rate at which VALUE is collected.
     uint256 public constant MAX_COLLECTION_RATE = 4.93150684931506e21;
-    // The rate at which part of the rewards are taken from users in case of consecutive ill behavior
+    /// @notice The rate at which part of the rewards are taken from users in case of consecutive ill behavior
     uint256 public rateOfCollection;
-    // VALUE tokens created per block, initially starts at the mid point of its max and min.
+    /// @notice VALUE tokens created per block, initially starts at the mid point of its max and min
     uint256 public rateOfDistribution;
-    // A numerical representation of the entire behavioral state of the Value Feed
+    /// @notice A numerical representation of the entire behavioral state of the Value Feed
     uint16 public ebState = 150;
-    // The time in seconds at which the value feed is first put up. Used in order to know when to distribute rewards.
+    /// @notice The time in seconds at which the value feed is first put up. Used in order to know when to distribute rewards
     uint256 public startTime;
-    // The total amount of monetary value in the entire value feed.
+    /// @notice The total amount of monetary value in the entire value feed
     uint256 public totalValue;
 
-    // Info of each user that provides tokens to the feed.
+    /// @notice Info of each user that provides tokens to the feed
     mapping (address => UserData) public userData;
-    // Each value pool is mapped to its respective token address
+    /// @notice Each value pool is mapped to its respective token address
     mapping (address => ValuePool) public valuePools;
-    // Contains each token address for which a value pool was created
+    /// @notice Contains each token address for which a value pool was created
     address[] tokens;
 
 
-    event Deposit(address indexed user, uint256 amount);
-    event Withdraw(address indexed user, uint256 amount);
+    event Deposit(address indexed user, address indexed token, uint256 amount);
+    event Withdraw(address indexed user, address indexed token, uint256 amount);
     event Swap(address[] indexed tokens, uint256 amount);
 
     /**
@@ -96,12 +101,11 @@ contract ValueFeed is Ownable {
      * @param _amount The specified amount of tokens being deposited
      */
     function deposit(address _tokenAddress, uint256 _amount) public payable {
-        ValuePool storage p = valuePools[_tokenAddress];
-        emit Deposit(msg.sender, _amount);
+        ValuePool storage valuePool = valuePools[_tokenAddress];
+        emit Deposit(msg.sender, _tokenAddress, _amount);
 
-        p.totalValue.add(_amount);
-        p.userValue[msg.sender].add(_amount);
-        totalValue.add(_amount);
+        valuePool.totalValue.add(_amount);
+        valuePool.userValue[msg.sender].add(_amount);
     }
 
     /**
@@ -142,12 +146,12 @@ contract ValueFeed is Ownable {
      * @param _amount The amount of tokens being withdrawn
      */
     function withdrawFromPool(address _tokenAddress, uint256 _amount) public {
-        require(valuePools[_tokenAddress].userValue[msg.sender] >= _amount, "Insufficient funds.");
-        emit Withdraw(msg.sender, _amount);
+        ValuePool storage valuePool = valuePools[_tokenAddress];
+        require(valuePool.userValue[msg.sender] >= _amount, "Insufficient funds.");
+        emit Withdraw(msg.sender, _tokenAddress, _amount);
 
-        valuePools[_tokenAddress].totalValue.sub(_amount);
-        valuePools[_tokenAddress].userValue[msg.sender].sub(_amount);
-        totalValue.sub(_amount);
+        valuePool.totalValue.sub(_amount);
+        valuePool.userValue[msg.sender].sub(_amount);
     }
 
     /**
@@ -156,8 +160,9 @@ contract ValueFeed is Ownable {
      */
     function withdrawAllOwned(address _user) public {
         for (uint256 i = 0; i < tokens.length; i++) {
-            if (valuePools[tokens[i]].userValue[_user] > 0) {
-                withdrawFromPool(tokens[i], valuePools[tokens[i]].userValue[_user]);
+            ValuePool storage valuePool = valuePools[tokens[i]];
+            if (valuePool.userValue[_user] > 0) {
+                withdrawFromPool(tokens[i], valuePool.userValue[_user]);
             }
         }
     }
@@ -214,12 +219,15 @@ contract ValueFeed is Ownable {
         path[0] = _tokenAddress;
         path[1] = UniswapV2Router02.WETH();
 
-        uint256 _amount = valuePools[_tokenAddress].totalValue;
+        ValuePool storage valuePool = valuePools[_tokenAddress];
+        uint256 _amount = valuePool.totalValue;
         require(IERC20(_tokenAddress).approve(UNISWAP_ROUTER_ADDRESS, _amount), 'Approve failed.');
 
         UniswapV2Router02.swapExactTokensForETH(_amount, 
                                                 UniswapV2Router02.getAmountsOut(_amount, path)[1], path, address(this),
                                                 block.timestamp.add(15));
+
+        emit Swap(path, _amount);
 
     }
 

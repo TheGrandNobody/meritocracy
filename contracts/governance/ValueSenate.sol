@@ -13,14 +13,12 @@ contract ValueSenate {
      * @notice All states a proposal can possess
      */
     enum State {
+        Awaiting,
         Active,
-        Pending,
-        Canceled,
         Passed,
         Failed,
-        Queued,
-        Expired,
-        Executed
+        Executed,
+        Canceled
     }
 
     /**
