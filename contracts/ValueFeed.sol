@@ -20,11 +20,11 @@ contract ValueFeed is Ownable {
 
     /// @notice Info of each user.
     struct UserData {
-        uint256 inProgress; // The amount of tokens owed by the value feed to the user (rewarded every four weeks).
-        uint256 meritScore; // The score which determines the value that the user brings to the system.
-        uint256 lastReward; // The amount of points last awarded to the user.
-        uint256 streak;     // The number of consecutive successful proposals made by the user (if applicable).
-        uint256 rewardRate; // The cumulative reward rate used to calculate the amount of VALUE earned every four weeks.
+        uint256 inProgress;   // The amount of tokens owed by the value feed to the user (rewarded every four weeks).
+        uint256 meritScore;   // The score which determines the value that the user brings to the system.
+        uint256 lastReward;   // The amount of points last awarded to the user.
+        uint256 streak;       // The number of consecutive successful proposals made by the user (if applicable).
+        uint256 rewardRate;   // The cumulative reward rate used to calculate the amount of VALUE earned every four weeks.
     }
 
     /// @notice Info of each pool.
@@ -102,6 +102,17 @@ contract ValueFeed is Ownable {
         p.totalValue.add(_amount);
         p.userValue[msg.sender].add(_amount);
         totalValue.add(_amount);
+    }
+
+    /**
+     * @notice Retrieves the merit score of a given user
+     * @dev For vote weight calculations/frontend
+     * @param _user ETH address of the specified user
+     * @return The merit score of the user
+     */
+    function viewMeritScore(address _user) public view returns (uint256) {
+        UserData storage user = userData[_user];
+        return user.meritScore;
     }
 
     /**

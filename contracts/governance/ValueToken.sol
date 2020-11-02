@@ -13,8 +13,15 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  */
 contract ValueToken is ERC20("Value", "VALUE"), Ownable {
 
-    /// @notice A record of all delegates
-    mapping (address => uint256) public delegates;
+    /**
+     * @notice A record of all
+     */
+    mapping (address => uint256) public voteBalances;
+
+    /**
+     * @notice A record of all delegates
+     */
+    mapping (address => address) public delegates;
 
     /**
      * @notice Creates a specific sum of tokens to an owner address.

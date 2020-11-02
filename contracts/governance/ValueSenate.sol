@@ -10,7 +10,7 @@ pragma solidity 0.7.0;
 contract ValueSenate {
 
     /**
-     * All states a proposal can possess
+     * @notice All states a proposal can possess
      */
     enum State {
         Active,
@@ -23,7 +23,9 @@ contract ValueSenate {
         Executed
     }
 
-    /// @notice Info of Value Feed trade proposals.
+    /**
+     * @notice Info of Value Feed trade proposals.
+     */
     struct TradeProposal {
         uint256 id;              // ID of the trade proposal
         uint256 timeOfExecution; // The time at which the proposal will be executed (if it is successful)
@@ -39,17 +41,23 @@ contract ValueSenate {
         State state;
     }
 
-    /// @notice Info of Value Feed update proposals.
+    /**
+     * @notice Info of Value Feed update proposals.
+     */
     struct UpdateProposal {
         uint256 id;       // ID of the update proposal
 
         address proposer; // Address of the proposer
     }
 
-    /// @notice A record of all trade proposals
+    /**
+     * @notice A record of all trade proposals
+     */
     mapping (uint256 => TradeProposal) public tradeProposals;
 
-    /// @notice A record of all update proposals
+    /**
+     * @notice A record of all update proposals
+     */
     mapping (uint256 => UpdateProposal) public updateProposals;
 
     
