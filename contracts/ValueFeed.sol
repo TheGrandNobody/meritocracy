@@ -147,8 +147,8 @@ contract ValueFeed is Ownable {
      */
     function withdrawFromPool(address _tokenAddress, uint256 _amount) public {
         ValuePool storage valuePool = valuePools[_tokenAddress];
-        require(valuePool.swapped, "Original assets currently in use");
-        require(valuePool.userValue[msg.sender] >= _amount, "Insufficient funds.");
+        require(valuePool.swapped, "ValueFeed::withdrawFromPool: Original assets currently in use");
+        require(valuePool.userValue[msg.sender] >= _amount, "ValueFeed::withdrawFromPool:Insufficient funds.");
         emit Withdraw(msg.sender, _tokenAddress, _amount);
 
         valuePool.totalValue.sub(_amount);
@@ -228,9 +228,9 @@ contract ValueFeed is Ownable {
         uint256 _amount = valuePool.totalValue;
         require(IERC20(_tokenAddress).approve(UNISWAP_ROUTER_ADDRESS, _amount), 'Approve failed.');
         if (swapBack) {
-            require(valuePool.swapped, "Reserves intact: swapping not necessary");
+            require(valuePool.swapped, "ValueFeed::swapTokensforETH: Reserves intact; swapping not necessary");
         } else {
-            require(!valuePool.swapped, "Reserves already in use");
+            require(!valuePool.swapped, "ValueFeed::swapTokensforETH: Reserves already in use");
         }
 
         emit Swap(path, _amount);
@@ -250,9 +250,9 @@ contract ValueFeed is Ownable {
         uint256 _amount = valuePool.totalValue;
         require(IERC20(path[0]).approve(UNISWAP_ROUTER_ADDRESS, _amount), 'Approve failed.');
         if (swapBack) {
-            require(valuePool.swapped, "Reserves intact: swapping not necessary");
+            require(valuePool.swapped, "ValueFeed::swapTokensforToken: Reserves intact; swapping not necessary");
         } else {
-            require(!valuePool.swapped, "Reserves already in use");
+            require(!valuePool.swapped, "ValueFeed::swapTokensforToken: Reserves already in use");
         }
         emit Swap(_path, _amount);
 
