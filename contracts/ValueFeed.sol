@@ -44,9 +44,9 @@ contract ValueFeed is Ownable {
     /// @notice The dev address
     address public dev;
     /// @notice The Uniswap Router
-    IUniswapV2Router02 private UniswapV2Router02;
+    IUniswapV2Router02 public UniswapV2Router02;
     /// @notice The maximum rate at which VALUE is minted every day.
-    address private constant UNISWAP_ROUTER_ADDRESS = 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D;
+    address public constant UNISWAP_ROUTER_ADDRESS = 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D;
     /// @notice At the maximum rate, supply lasts 10 years. Note: we operate on a base of 1 = 1e18 (account for decimals)
     uint256 public constant MAX_DISTRIBUTION_RATE = 2.46575342465753e22;
     /// @notice The maximum rate at which VALUE is collected.
@@ -67,7 +67,7 @@ contract ValueFeed is Ownable {
     /// @notice Each value pool is mapped to its respective token address
     mapping (address => ValuePool) public valuePools;
     /// @notice Contains each token address for which a value pool was created
-    address[] tokens;
+    address[] public tokens;
 
 
     event Deposit(address indexed user, address indexed token, uint256 amount);
@@ -141,8 +141,19 @@ contract ValueFeed is Ownable {
     }
 
     /**
-     * @notice Withdraws a given amount from a value pool
-     * @param _tokenAddress The address of the token contract who's value pool
+     * @notice Retrieves the amount of tokens belonging to a given user in a given value pool
+     * @param _user ETH address of the specified user
+     * @param _tokenAddress The address of the specified ERC20 token contract
+     * @return The amount of the specified tokens allocated in the value pool by the user
+     */
+    function viewAllocatedValue(address _user, address _tokenAddress) external view returns (uint256) {
+        ValuePool storage valuePool = valuePools[_tokenAddress];
+        return valuePool.userValue[_user];
+    }
+
+    /**
+     * @notice Withdraws a given amount from a given value pool
+     * @param _tokenAddress The address of the specified token contract
      * @param _amount The amount of tokens being withdrawn
      */
     function withdrawFromPool(address _tokenAddress, uint256 _amount) public {
@@ -227,7 +238,7 @@ contract ValueFeed is Ownable {
         ValuePool storage valuePool = valuePools[_tokenAddress];
         uint256 _amount = valuePool.totalValue;
         require(IERC20(_tokenAddress).approve(UNISWAP_ROUTER_ADDRESS, _amount), 'Approve failed.');
-        if (swapBack) {
+        if (_swapBack) {
             require(valuePool.swapped, "ValueFeed::swapTokensforETH: Reserves intact; swapping not necessary");
         } else {
             require(!valuePool.swapped, "ValueFeed::swapTokensforETH: Reserves already in use");
@@ -242,21 +253,21 @@ contract ValueFeed is Ownable {
 
     /**
      * @notice Swaps a value pool's reserves for a given token
-     * @param path The specified array of token addresses for the UniSwapV2Router02 to use for swapping
+     * @param _path The specified array of token addresses for the UniSwapV2Router02 to use for swapping
      * @param _swapBack Boolean specifying whether the reserves are being swapped back to their original asset
      */
-    function swapTokensForToken(address[] _path, bool _swapBack) public onlyOwner {
+    function swapTokensForToken(address[] memory _path, bool _swapBack) public onlyOwner {
         ValuePool storage valuePool = valuePools[_path[0]];
         uint256 _amount = valuePool.totalValue;
-        require(IERC20(path[0]).approve(UNISWAP_ROUTER_ADDRESS, _amount), 'Approve failed.');
-        if (swapBack) {
+        require(IERC20(_path[0]).approve(UNISWAP_ROUTER_ADDRESS, _amount), 'Approve failed.');
+        if (_swapBack) {
             require(valuePool.swapped, "ValueFeed::swapTokensforToken: Reserves intact; swapping not necessary");
         } else {
             require(!valuePool.swapped, "ValueFeed::swapTokensforToken: Reserves already in use");
         }
         emit Swap(_path, _amount);
 
-        UniswapV2Router02.swapExactTokensForToken(_amount, UniswapV2Router02.getAmountsOut(_amount, _path)[_path.length.sub(1)], 
+        UniswapV2Router02.swapExactTokensForTokens(_amount, UniswapV2Router02.getAmountsOut(_amount, _path)[_path.length.sub(1)], 
                                                   _path, address(this),block.timestamp.add(15));
         valuePool.swapped = !_swapBack;
     }

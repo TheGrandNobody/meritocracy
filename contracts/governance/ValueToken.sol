@@ -6,13 +6,13 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 
 /**
- * @title A contract for the Value Token
+ * @title A contract for the Value token
  * @author Nobody (that's me!)
  * @notice The value token is the governance token of the value feed, an economic regulating tool,
  * and a means of rewarding users for positive performance. 
- * Some code taken and changed from "Comp.sol" contract, available at
+ * Some code is taken and changed from the "Comp.sol" contract, available at
  * https://github.com/compound-finance/compound-protocol/blob/master/contracts/Governance/Comp.sol.
- * Credits are written accordingly.
+ * Credits are given/written accordingly.
  */
 contract ValueToken is ERC20("Value", "VALUE"), Ownable {
 
@@ -93,9 +93,31 @@ contract ValueToken is ERC20("Value", "VALUE"), Ownable {
         _mint(_to, _amount);
     }
 
+    /**
+     * @notice Retrieves the address of a delegate for a given user
+     * @param _user The address of the specified user
+     * @return The address of the delegate for this address (self if none)
+     */
+    function viewDelegate(address _user) external view returns (address) {
+        return delegates[_user] != address(0) ? delegates[_user] : _user;
+    }
 
-    function getChainId() internal pure returns (uint) {
-        uint chainId;
+    /**
+     * @notice Retrieves the additional amount of votes for a given delegate
+     * @param _delegator The address of the specified delegate
+     * @return The additional vote balance of the specified delegate
+     */
+    function viewDelegateVotes(address _delegator) external view returns (uint256) {
+        return additionalVoteBalances[_delegator];
+    }
+
+    /**
+     * @notice Obtains the CHAIN_ID variable corresponding to the network the contract is deployed at
+     * @return The chain ID for the current network this contract is deployed at
+     * @dev Taken and changed from Comp.sol
+     */
+    function getChainId() internal pure returns (uint256) {
+        uint256 chainId;
         assembly { chainId := chainid() }
         return chainId;
     }
