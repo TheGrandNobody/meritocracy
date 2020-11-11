@@ -27,6 +27,7 @@ contract ValueFeed is Ownable {
         uint256 lastReward;   // The amount of points last awarded to the user
         uint256 streak;       // The number of consecutive successful proposals made by the user (if applicable)
         uint256 rewardRate;   // The cumulative reward rate used to calculate the amount of VALUE earned every four weeks
+        uint256 totalAmount;
     }
 
     
@@ -75,7 +76,7 @@ contract ValueFeed is Ownable {
     event Swap(address[] indexed tokens, uint256 amount);
 
     /**
-     * Constructor: initiates the value feed smart contract
+     * @notice Constructor: initiates the value feed smart contract
      * @param _value The value token
      */
     constructor(ValueToken _value) {
@@ -102,19 +103,32 @@ contract ValueFeed is Ownable {
      */
     function deposit(address _tokenAddress, uint256 _amount) public payable {
         ValuePool storage valuePool = valuePools[_tokenAddress];
+        UserData storage user = userData[msg.sender];
         emit Deposit(msg.sender, _tokenAddress, _amount);
 
+        user.totalAmount.add(_amount);
         valuePool.totalValue.add(_amount);
         valuePool.userValue[msg.sender].add(_amount);
+        
     }
 
+    /**
+     * @notice Retrives the total numerical amount of tokens allocated by a given user
+     * @dev Does not return the value of these tokens, just the numerical sum total
+     * @param _user ETH address of the specified user 
+     * @return The total numerical amount of tokens allocated by the user
+     */
+    function viewTotalAmount(address _user) external view returns (uint256) {
+        UserData storage user = userData[_user];
+        return user.totalAmount;
+    }
     /**
      * @notice Retrieves the merit score of a given user
      * @dev For vote weight calculations/frontend
      * @param _user ETH address of the specified user
      * @return The merit score of the user
      */
-    function viewMeritScore(address _user) public view returns (uint256) {
+    function viewMeritScore(address _user) external view returns (uint256) {
         UserData storage user = userData[_user];
         return user.meritScore;
     }
@@ -158,12 +172,32 @@ contract ValueFeed is Ownable {
      */
     function withdrawFromPool(address _tokenAddress, uint256 _amount) public {
         ValuePool storage valuePool = valuePools[_tokenAddress];
+        UserData storage user = userData[msg.sender];
         require(valuePool.swapped, "ValueFeed::withdrawFromPool: Original assets currently in use");
         require(valuePool.userValue[msg.sender] >= _amount, "ValueFeed::withdrawFromPool:Insufficient funds.");
         emit Withdraw(msg.sender, _tokenAddress, _amount);
 
+        user.totalAmount.sub(_amount);
         valuePool.totalValue.sub(_amount);
         valuePool.userValue[msg.sender].sub(_amount);
+    }
+
+    /**
+     * @notice Withdraws a given amount from a given value pool for a given user
+     * @param _tokenAddress The address of the specified token contract
+     * @param _user The ETH address of the specified user  
+     * @param _amount The amount of tokens being withdrawn
+     */
+    function withdrawFromPool(address _tokenAddress, address _user, uint256 _amount) public {
+        ValuePool storage valuePool = valuePools[_tokenAddress];
+        UserData storage user = userData[_user];
+        require(valuePool.swapped, "ValueFeed::withdrawFromPool: Original assets currently in use");
+        require(valuePool.userValue[_user] >= _amount, "ValueFeed::withdrawFromPool:Insufficient funds.");
+        emit Withdraw(_user, _tokenAddress, _amount);
+
+        user.totalAmount.sub(_amount);
+        valuePool.totalValue.sub(_amount);
+        valuePool.userValue[_user].sub(_amount);
     }
 
     /**
