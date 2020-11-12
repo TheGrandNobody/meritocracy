@@ -106,9 +106,9 @@ contract ValueFeed is Ownable {
         UserData storage user = userData[msg.sender];
         emit Deposit(msg.sender, _tokenAddress, _amount);
 
-        user.totalAmount.add(_amount);
-        valuePool.totalValue.add(_amount);
-        valuePool.userValue[msg.sender].add(_amount);
+        user.totalAmount = user.totalAmount.add(_amount);
+        valuePool.totalValue = valuePool.totalValue.add(_amount);
+        valuePool.userValue[msg.sender] = valuePool.userValue[msg.sender].add(_amount);
         
     }
 
@@ -177,9 +177,9 @@ contract ValueFeed is Ownable {
         require(valuePool.userValue[msg.sender] >= _amount, "ValueFeed::withdrawFromPool:Insufficient funds.");
         emit Withdraw(msg.sender, _tokenAddress, _amount);
 
-        user.totalAmount.sub(_amount);
-        valuePool.totalValue.sub(_amount);
-        valuePool.userValue[msg.sender].sub(_amount);
+        user.totalAmount = user.totalAmount.sub(_amount);
+        valuePool.totalValue = valuePool.totalValue.sub(_amount);
+        valuePool.userValue[msg.sender] = valuePool.userValue[msg.sender].sub(_amount);
     }
 
     /**
@@ -195,9 +195,9 @@ contract ValueFeed is Ownable {
         require(valuePool.userValue[_user] >= _amount, "ValueFeed::withdrawFromPool:Insufficient funds.");
         emit Withdraw(_user, _tokenAddress, _amount);
 
-        user.totalAmount.sub(_amount);
-        valuePool.totalValue.sub(_amount);
-        valuePool.userValue[_user].sub(_amount);
+       user.totalAmount = user.totalAmount.sub(_amount);
+        valuePool.totalValue = valuePool.totalValue.sub(_amount);
+        valuePool.userValue[_user] = valuePool.userValue[_user].sub(_amount);
     }
 
     /**

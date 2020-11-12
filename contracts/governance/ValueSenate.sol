@@ -23,7 +23,7 @@ contract ValueSenate {
     /**
      * @notice Constructor: Initializes the Value Senate contract
      * @param _valueFeed Address of the Value Feed contract
-     * @param _valueToken Address of the Value token
+     * @param _valueToken Address of the Value token contract
      */
     constructor(address _valueFeed, address _valueToken) {
         valueFeed = IValueFeed(_valueFeed);
@@ -35,7 +35,8 @@ contract ValueSenate {
      */
     enum State {
         Awaiting,
-        Active,
+        InProgress,
+        Finalizing,
         Passed,
         Failed,
         Executed,
@@ -86,6 +87,7 @@ contract ValueSenate {
     mapping (uint256 => UpdateProposal) public updateProposals;
 
     event Voted(address indexed voter, uint256 id, bool pro);
+    event TradeProposalPassed(uint256 id, uint256 time);
 
     /// @notice The EIP-712 typehash for the contract's domain
     bytes32 public constant EIP_DOMAIN_TYPEHASH = keccak256("EIPDomain(string contractName, uint256 chainId, address contractAddress)");
@@ -131,7 +133,7 @@ contract ValueSenate {
      */
     function _voteOnTradeProposal(uint256 _id, address _voter, bool _pro) private {
         TradeProposal storage proposal = tradeProposals[_id];
-        require(proposal.state == State.Active, "ValueSenate::_voteOnTradeProposal: Proposal inactive");
+        require(proposal.state == State.InProgress, "ValueSenate::_voteOnTradeProposal: Proposal is not in state for voting");
         require(valueFeed.viewTotalAmount(_voter) > 0, "ValueSenate::_voteOnTradeProposal: User is not a contributor to the Value Feed");
         require(!proposal.voted[_voter], "ValueSenate::_voteOnTradeProposal: User has already voted");
         require(value.viewDelegate(_voter) == _voter, "ValueSenate::_voteOnTradeProposal");
@@ -139,14 +141,30 @@ contract ValueSenate {
         uint256 numberOfVotes = valueFeed.viewMeritScore(_voter).mul(100).add(value.viewDelegateVotes(_voter));
 
         if (_pro) {
-            proposal.votesFor.add(numberOfVotes);
+            proposal.votesFor = proposal.votesFor.add(numberOfVotes);
         } else {
-            proposal.votesAgainst.add(numberOfVotes);
+            proposal.votesAgainst = proposal.votesAgainst.add(numberOfVotes);
         }
 
         proposal.voted[_voter] = true;
 
         emit Voted(_voter, _id, _pro);
+    }
+
+    function tallyFirstTradeVote(uint256 _id) external {
+        TradeProposal storage proposal = tradeProposals[_id];
+        require(proposal.state == State.Finalizing, "ValueSenate::tallyFirstTradeVote: Proposal is not in state for tallying");
+
+        uint256 total = proposal.votesAgainst.add(proposal.votesFor);
+        uint256 percentageFor = proposal.votesFor.mul(100).div(total);
+
+        if (percentageFor >= 51) {
+            proposal.state = State.Passed;
+            emit TradeProposalPassed(_id, block.timestamp);
+            
+        } else {
+            proposal.state = State.Failed;
+        }
     }
     
     /**
