@@ -3,6 +3,8 @@ pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/math/SafeMath.sol";
+import "../interfaces/IValueFeed.sol";
 
 
 /**
@@ -15,6 +17,18 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  * Credits are given/written accordingly.
  */
 contract ValueToken is ERC20("Value", "VALUE"), Ownable {
+
+    using SafeMath for uint256;
+
+    IValueFeed valueFeed;
+
+    /**
+     * @notice Constructor: Initializes the Value Senate contract
+     * @param _valueFeed Address of the Value Feed contract
+     */
+    constructor(address _valueFeed) {
+        valueFeed = IValueFeed(_valueFeed);
+    }
 
     /**
      * @notice A record of all additional votes (owned by delegates)
@@ -79,9 +93,12 @@ contract ValueToken is ERC20("Value", "VALUE"), Ownable {
      */
     function _delegate(address _delegator, address _delegatee) internal {
         address oldDelegatee = delegates[_delegator];
+        additionalVoteBalances[oldDelegatee] = additionalVoteBalances[oldDelegatee].sub(valueFeed.viewMeritScore(_delegator));
         delegates[_delegator] = _delegatee;
 
         emit DelegateUpdated(_delegator, oldDelegatee, _delegatee);
+
+        additionalVoteBalances[_delegatee] = additionalVoteBalances[_delegatee].add(valueFeed.viewMeritScore(_delegator));
     }
 
     /**

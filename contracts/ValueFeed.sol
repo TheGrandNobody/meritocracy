@@ -27,7 +27,7 @@ contract ValueFeed is Ownable {
         uint256 lastReward;   // The amount of points last awarded to the user
         uint256 streak;       // The number of consecutive successful proposals made by the user (if applicable)
         uint256 rewardRate;   // The cumulative reward rate used to calculate the amount of VALUE earned every four weeks
-        uint256 totalAmount;
+        uint256 totalAmount;  // The numerical total amount of tokens owned by a user (not the total value)
     }
 
     
@@ -157,12 +157,21 @@ contract ValueFeed is Ownable {
     /**
      * @notice Retrieves the amount of tokens belonging to a given user in a given value pool
      * @param _user ETH address of the specified user
-     * @param _tokenAddress The address of the specified ERC20 token contract
+     * @param _tokenAddress The address of the specified ERC20 token contract of this value pool
      * @return The amount of the specified tokens allocated in the value pool by the user
      */
     function viewAllocatedValue(address _user, address _tokenAddress) external view returns (uint256) {
         ValuePool storage valuePool = valuePools[_tokenAddress];
         return valuePool.userValue[_user];
+    }
+
+    /**
+     * @notice Retrieves whether the value pool is currently swapped for another token or not
+     * @param _tokenAddress The address of the specified ERC20 token contract of this value pool
+     */
+    function viewSwapped(address _tokenAddress) external view returns (bool) {
+        ValuePool storage valuePool = valuePools[_tokenAddress];
+        return valuePool.swapped;
     }
 
     /**
@@ -183,32 +192,13 @@ contract ValueFeed is Ownable {
     }
 
     /**
-     * @notice Withdraws a given amount from a given value pool for a given user
-     * @param _tokenAddress The address of the specified token contract
-     * @param _user The ETH address of the specified user  
-     * @param _amount The amount of tokens being withdrawn
-     */
-    function withdrawFromPool(address _tokenAddress, address _user, uint256 _amount) public {
-        ValuePool storage valuePool = valuePools[_tokenAddress];
-        UserData storage user = userData[_user];
-        require(valuePool.swapped, "ValueFeed::withdrawFromPool: Original assets currently in use");
-        require(valuePool.userValue[_user] >= _amount, "ValueFeed::withdrawFromPool:Insufficient funds.");
-        emit Withdraw(_user, _tokenAddress, _amount);
-
-       user.totalAmount = user.totalAmount.sub(_amount);
-        valuePool.totalValue = valuePool.totalValue.sub(_amount);
-        valuePool.userValue[_user] = valuePool.userValue[_user].sub(_amount);
-    }
-
-    /**
      * @notice Withdraws all tokens owned by a user from their respective value pools
-     * @param _user The ETH address of the specified user
      */
-    function withdrawAllOwned(address _user) public {
+    function withdrawAllOwned() public {
         for (uint256 i = 0; i < tokens.length; i++) {
             ValuePool storage valuePool = valuePools[tokens[i]];
-            if (valuePool.userValue[_user] > 0) {
-                withdrawFromPool(tokens[i], valuePool.userValue[_user]);
+            if (valuePool.userValue[msg.sender] > 0) {
+                withdrawFromPool(tokens[i], valuePool.userValue[msg.sender]);
             }
         }
     }
@@ -264,7 +254,7 @@ contract ValueFeed is Ownable {
      * @param _tokenAddress The specified token address for the UniSwapV2Router02 to use for swapping
      * @param _swapBack Boolean specifying whether the reserves are being swapped back to their original asset
      */
-    function swapTokensForETH(address _tokenAddress, bool _swapBack) public onlyOwner {
+    function swapTokensForETH(address _tokenAddress, bool _swapBack) external onlyOwner {
         address[] memory path = new address[](2);
         path[0] = _tokenAddress;
         path[1] = UniswapV2Router02.WETH();
@@ -290,7 +280,7 @@ contract ValueFeed is Ownable {
      * @param _path The specified array of token addresses for the UniSwapV2Router02 to use for swapping
      * @param _swapBack Boolean specifying whether the reserves are being swapped back to their original asset
      */
-    function swapTokensForToken(address[] memory _path, bool _swapBack) public onlyOwner {
+    function swapTokensForToken(address[] memory _path, bool _swapBack) external onlyOwner {
         ValuePool storage valuePool = valuePools[_path[0]];
         uint256 _amount = valuePool.totalValue;
         require(IERC20(_path[0]).approve(UNISWAP_ROUTER_ADDRESS, _amount), 'Approve failed.');

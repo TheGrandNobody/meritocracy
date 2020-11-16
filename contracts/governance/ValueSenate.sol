@@ -34,9 +34,7 @@ contract ValueSenate {
      * @notice All states a proposal can possess
      */
     enum State {
-        Awaiting,
         InProgress,
-        Finalizing,
         Passed,
         Failed,
         Executed,
@@ -48,9 +46,9 @@ contract ValueSenate {
      */
     struct TradeProposal {
         uint256 id;                      // ID of the trade proposal
-        uint256 timeOfExecution;         // The time at which the proposal will be executed (if it is successful)
         uint256 startTime;               // The unix time at which the voting period for this proposal starts
         uint256 endTime;                 // The unix time at which the voting period for this proposal ends
+        uint256 timeOfExecution;         // The unix time at which the proposal is executed (if passed)
         uint256 votesFor;                // The number of votes for the proposal
         uint256 votesAgainst;            // The number of votes against the proposal
 
@@ -86,8 +84,14 @@ contract ValueSenate {
      */
     mapping (uint256 => UpdateProposal) public updateProposals;
 
+    /**
+     * @notice Integer for atomic increase (keeps tracks of the latest trade proposal ID)
+     */
+    uint256 public lastTradeId;
+
     event Voted(address indexed voter, uint256 id, bool pro);
-    event TradeProposalPassed(uint256 id, uint256 time);
+    event TradeProposalInitiated(uint256 id, address indexed proposer, address valuePool, address targetAsset);
+    event TradeProposalFinalized(uint256 id, uint256 time, bool passed);
 
     /// @notice The EIP-712 typehash for the contract's domain
     bytes32 public constant EIP_DOMAIN_TYPEHASH = keccak256("EIPDomain(string contractName, uint256 chainId, address contractAddress)");
@@ -95,7 +99,27 @@ contract ValueSenate {
     /// @notice The EIP-712 typehash for the voting struct used by the contract
     bytes32 public constant VOTE_STRUCT_TYPEHASH = keccak256("Vote(address voter, uint256 id, bool pro)");
 
-    /** 
+    function proposeTrade(address proposer, address valuePool, address targetAsset) public  {
+        require(valueFeed.viewMeritScore(proposer) + value.viewDelegateVotes(proposer) >= 4e5, "ValueSenate::proposeTrade: User is not competent enough to propose"); 
+        require(!valueFeed.viewSwapped(valuePool), "ValueSenate::proposeTrade: Value Pool is already in use");
+
+        TradeProposal storage proposal = tradeProposals[lastTradeId];
+        proposal.id = lastTradeId;
+        lastTradeId = lastTradeId.add(1);
+    
+        proposal.startTime = block.timestamp;
+        proposal.endTime = proposal.startTime.add(86400);
+        proposal.proposer = proposer;
+        proposal.votesFor = valueFeed.viewMeritScore(proposer) + value.viewDelegateVotes(proposer);
+        proposal.voted[proposer] = true;
+        proposal.sourceToken = valuePool;
+        proposal.targetAsset = targetAsset;
+        proposal.state = State.InProgress;
+
+        emit TradeProposalInitiated(proposal.id, proposer, valuePool, targetAsset);
+    }
+
+    /**
      * @notice (Intermediary) votes on a given trade proposal for a user
      * @param _id The ID of the specified trade proposal
      * @param _pro Whether the user is for (true) or against (false) the trade proposal
@@ -133,12 +157,14 @@ contract ValueSenate {
      */
     function _voteOnTradeProposal(uint256 _id, address _voter, bool _pro) private {
         TradeProposal storage proposal = tradeProposals[_id];
-        require(proposal.state == State.InProgress, "ValueSenate::_voteOnTradeProposal: Proposal is not in state for voting");
+        require((proposal.state == State.InProgress)
+             && (proposal.startTime <= block.timestamp) 
+             && (proposal.endTime > block.timestamp), "ValueSenate::_voteOnTradeProposal: Proposal is not in state for voting");
         require(valueFeed.viewTotalAmount(_voter) > 0, "ValueSenate::_voteOnTradeProposal: User is not a contributor to the Value Feed");
         require(!proposal.voted[_voter], "ValueSenate::_voteOnTradeProposal: User has already voted");
         require(value.viewDelegate(_voter) == _voter, "ValueSenate::_voteOnTradeProposal");
 
-        uint256 numberOfVotes = valueFeed.viewMeritScore(_voter).mul(100).add(value.viewDelegateVotes(_voter));
+        uint256 numberOfVotes = valueFeed.viewMeritScore(_voter).add(value.viewDelegateVotes(_voter));
 
         if (_pro) {
             proposal.votesFor = proposal.votesFor.add(numberOfVotes);
@@ -150,22 +176,43 @@ contract ValueSenate {
 
         emit Voted(_voter, _id, _pro);
     }
-
+    
     function tallyFirstTradeVote(uint256 _id) external {
         TradeProposal storage proposal = tradeProposals[_id];
-        require(proposal.state == State.Finalizing, "ValueSenate::tallyFirstTradeVote: Proposal is not in state for tallying");
+        require(proposal.endTime <= block.timestamp, "ValueSenate::tallyFirstTradeVote: Proposal still under voting period");
+        require(proposal.state == State.InProgress, "ValueSenate::tallyFirstTradeVote: Proposal is not in a state for tallying");
 
         uint256 total = proposal.votesAgainst.add(proposal.votesFor);
         uint256 percentageFor = proposal.votesFor.mul(100).div(total);
+        uint256 percentageAgainst = proposal.votesAgainst.mul(100).div(total);
+        uint256 timeOfExecution = block.timestamp;
 
-        if (percentageFor >= 51) {
+        if (percentageFor > percentageAgainst) {
             proposal.state = State.Passed;
-            emit TradeProposalPassed(_id, block.timestamp);
-            
+            proposal.timeOfExecution = timeOfExecution.add(2592000);
+            emit TradeProposalFinalized(_id, timeOfExecution, true);
         } else {
             proposal.state = State.Failed;
+            emit TradeProposalFinalized(_id, timeOfExecution, false);
         }
     }
+
+    function executeTradeProposal(uint256 _id, address[] memory _path, bool _ethTrade, bool _tokenForEth) public {
+        TradeProposal storage proposal = tradeProposals[_id];
+        require(proposal.state == State.Passed, "ValueSenate::executeTradeProposal: Proposal was not passed");
+        require(proposal.timeOfExecution <= block.timestamp, "ValueSenate::executeTradeProposal: Timelock time has not passed yet");
+        
+        if (!_ethTrade) {
+            valueFeed.swapTokensForToken(_path, false);
+        } else if (_tokenForEth) {
+            valueFeed.swapTokensForETH(_path[0], false);
+        } else {
+            valueFeed.swapETHForToken(_path, false);
+        }
+
+        proposal.state = State.Executed;
+    }
+
     
     /**
      * @notice Obtains the CHAIN_ID variable corresponding to the network the contract is deployed at

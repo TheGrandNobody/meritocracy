@@ -17,4 +17,12 @@ interface IValueFeed {
     
     function viewAllocatedValue(address _user, address _tokenAddress) external view returns (uint256);
 
+    function viewSwapped(address _tokenAddress) external view returns (bool);
+
+    function swapTokensForToken(address[] memory _path, bool _swapBack) external;
+
+    function swapTokensForETH(address _tokenAddress, bool _swapBack) external;
+
+    function swapETHforToken(address[] memory _path, bool _swapBack) external;
+
 }
