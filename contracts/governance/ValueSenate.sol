@@ -2,6 +2,7 @@ pragma solidity 0.7.0;
 
 import "../interfaces/IValueFeed.sol";
 import "../interfaces/IValueToken.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 
 
@@ -13,7 +14,7 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
  * https://github.com/compound-finance/compound-protocol/blob/master/contracts/Governance/Comp.sol.
  * Credits are given/written accordingly.
  */
-contract ValueSenate {
+contract ValueSenate is Ownable {
 
     using SafeMath for uint256;
 
@@ -52,9 +53,11 @@ contract ValueSenate {
         uint256 votesFor;                // The number of votes for the proposal
         uint256 votesAgainst;            // The number of votes against the proposal
 
-        address proposer;                // Address of the proposer
+        address proposer;                // Address of the "trade for" proposer
         address sourceToken;             // Address of the token held by a given value pool (to exchange with)
         address targetAsset;             // Address of the target token's contract (to exchange for)
+
+        bool withdrawal;                 // Determines whether this is a withdrawal trade proposal
 
         mapping (address => bool) voted; // Record of users who have voted
 
@@ -74,6 +77,19 @@ contract ValueSenate {
         State state;      // The state of the proposal
     }
 
+    struct SuccessProposal {
+        uint256 id;                      // ID of the success proposal
+        uint256 startTime;               // The unix time at which the voting period for this proposal starts
+        uint256 endTime;                 // The unix time at which the voting period for this proposal ends
+        uint256 votesFor;                // The number of votes for the proposal
+        uint256 votesAgainst;            // The number of votes against the proposal
+
+        mapping (address => bool) voted; // Record of users who have voted
+
+        uint256[] proposals;             // Array of ids for the proposals this success proposal represents
+        State state;                     // The state of the proposal
+    }
+
     /**
      * @notice A record of all trade proposals
      */
@@ -85,13 +101,24 @@ contract ValueSenate {
     mapping (uint256 => UpdateProposal) public updateProposals;
 
     /**
+     * @notice A record of all success proposals
+     */
+    mapping (uint256 => SuccessProposal) public successProposals;
+
+    /**
      * @notice Integer for atomic increase (keeps tracks of the latest trade proposal ID)
      */
     uint256 public lastTradeId;
 
+    /**
+     * @notice Integer for atomic increase (keeps tracks of the latest success proposal ID)
+     */
+    uint256 public lastSuccessId;
+
     event Voted(address indexed voter, uint256 id, bool pro);
-    event TradeProposalInitiated(uint256 id, address indexed proposer, address valuePool, address targetAsset);
+    event TradeProposalInitiated(uint256 id, address indexed proposer, address valuePool, address targetAsset, uint256 startTime, uint256 endTime, bool second);
     event TradeProposalFinalized(uint256 id, uint256 time, bool passed);
+    event TradeWithdrawal(uint256 id);
 
     /// @notice The EIP-712 typehash for the contract's domain
     bytes32 public constant EIP_DOMAIN_TYPEHASH = keccak256("EIPDomain(string contractName, uint256 chainId, address contractAddress)");
@@ -99,9 +126,16 @@ contract ValueSenate {
     /// @notice The EIP-712 typehash for the voting struct used by the contract
     bytes32 public constant VOTE_STRUCT_TYPEHASH = keccak256("Vote(address voter, uint256 id, bool pro)");
 
-    function proposeTrade(address proposer, address valuePool, address targetAsset) public  {
+    /**
+     * @notice Initiates a trade proposal by a given user so as to trade the asset of a value pool for a target asset
+     * @param proposer The ETH address of the specified user making the proposal
+     * @param valuePool The ERC20 address of the asset belonging to the specified value pool
+     * @param targetAsset The ERC20 address of the specified target token for which the value pool's contents will be traded
+     * @param second Determines whether this is the first (trade for) or second (trade back for) round of the proposal
+     */
+    function proposeTrade(address proposer, address valuePool, address targetAsset, bool second) external  {
         require(valueFeed.viewMeritScore(proposer) + value.viewDelegateVotes(proposer) >= 4e5, "ValueSenate::proposeTrade: User is not competent enough to propose"); 
-        require(!valueFeed.viewSwapped(valuePool), "ValueSenate::proposeTrade: Value Pool is already in use");
+        require(valueFeed.viewSwapped(valuePool) == second, "ValueSenate::proposeTrade: Value Pool is not in the right state");
 
         TradeProposal storage proposal = tradeProposals[lastTradeId];
         proposal.id = lastTradeId;
@@ -114,9 +148,12 @@ contract ValueSenate {
         proposal.voted[proposer] = true;
         proposal.sourceToken = valuePool;
         proposal.targetAsset = targetAsset;
-        proposal.state = State.InProgress;
 
-        emit TradeProposalInitiated(proposal.id, proposer, valuePool, targetAsset);
+        proposal.withdrawal = second;
+        
+        proposal.state = State.InProgress;   
+
+        emit TradeProposalInitiated(proposal.id, proposer, valuePool, targetAsset, proposal.startTime, proposal.endTime, second);
     }
 
     /**
@@ -177,10 +214,10 @@ contract ValueSenate {
         emit Voted(_voter, _id, _pro);
     }
     
-    function tallyFirstTradeVote(uint256 _id) external {
+    function tallyTradeVote(uint256 _id) external {
         TradeProposal storage proposal = tradeProposals[_id];
-        require(proposal.endTime <= block.timestamp, "ValueSenate::tallyFirstTradeVote: Proposal still under voting period");
-        require(proposal.state == State.InProgress, "ValueSenate::tallyFirstTradeVote: Proposal is not in a state for tallying");
+        require(proposal.endTime <= block.timestamp, "ValueSenate::tallyTradeVote: Proposal still under voting period");
+        require(proposal.state == State.InProgress, "ValueSenate::tallyTradeVote: Proposal is not in a state for tallying");
 
         uint256 total = proposal.votesAgainst.add(proposal.votesFor);
         uint256 percentageFor = proposal.votesFor.mul(100).div(total);
@@ -211,6 +248,14 @@ contract ValueSenate {
         }
 
         proposal.state = State.Executed;
+
+        if (proposal.withdrawal) {
+            emit TradeWithdrawal(proposal.id);
+        }
+    }
+
+    function evaluate(uint256 _tradeId, uint256 _withdrawId, uint256 _internalEval) public onlyOwner {
+        
     }
 
     
