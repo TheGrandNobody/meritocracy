@@ -136,6 +136,7 @@ contract ValueSenate is Ownable {
     event TradeProposalFinalized(uint256 id, uint256 time, bool passed);
     event TradeWithdrawal(uint256 id);
     event SuccessProposalInitiated(uint256 id, uint256 startTime, uint256 endTime);
+    event SuccessProposalFinalized(uint256 degreeOfSuccess, bool aiVote, bool success);
 
     /// @notice The EIP-712 typehash for the contract's domain
     bytes32 public constant EIP_DOMAIN_TYPEHASH = keccak256("EIPDomain(string contractName, uint256 chainId, address contractAddress)");
@@ -333,8 +334,15 @@ contract ValueSenate is Ownable {
 
     function evaluate(uint256 _id) public onlyOwner {
         SuccessProposal storage proposal = successProposals[_id];
+        require(proposal.endTime <= block.timestamp, "ValueSenate::evaluate: Success evaluation still ongoing");
+        require(proposal.state == State.InProgress, "ValueSenate::evaluate: Not in state for tallying");
 
-        
+        uint256 total = proposal.votesAgainst.add(proposal.votesFor);
+        uint256 percentageFor = proposal.votesFor.mul(100).div(total);
+        uint256 percentageAgainst = proposal.votesAgainst.mul(100).div(total);
+        uint256 successDegree = percentageFor > percentageAgainst ? percentageFor : percentageAgainst;
+
+        emit SuccessProposalFinalized(successDegree, proposal.aiVote ,percentageFor > percentageAgainst);
 
     }
 
