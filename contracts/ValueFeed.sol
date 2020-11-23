@@ -30,6 +30,8 @@ contract ValueFeed is Ownable {
         uint256 streak;       // The number of consecutive successful proposals made by the user (if applicable)
         uint256 rewardRate;   // The cumulative reward rate used to calculate the amount of VALUE earned every four weeks
         uint256 totalAmount;  // The numerical total amount of tokens owned by a user (not the total value)
+
+        bool firstTime;       // Indicates whether user is joining for the first time
     }
 
     
@@ -109,8 +111,9 @@ contract ValueFeed is Ownable {
         ValuePool storage valuePool = valuePools[_tokenAddress];
         UserData storage user = userData[msg.sender];
 
-        if (user.totalAmount == 0) {
+        if (!user.firstTime) {
             numberOfUsers = numberOfUsers.add(1);
+            user.firstTime = true;
         }
 
         emit Deposit(msg.sender, _tokenAddress, _amount);
@@ -298,7 +301,7 @@ contract ValueFeed is Ownable {
     }
 
     /**
-     * @notice Swaps a value pool's reserves for a given token
+     * @notice Swaps a value pool's reserves for ETH
      * @param _tokenAddress The specified token address for the UniSwapV2Router02 to use for swapping
      * @param _swapBack Boolean specifying whether the reserves are being swapped back to their original asset
      */
@@ -346,6 +349,34 @@ contract ValueFeed is Ownable {
                                                    _path, 
                                                    address(this),
                                                    block.timestamp.add(15));
+        valuePool.swapped = !_swapBack;
+    }
+
+    /**
+     * @notice Swaps the ETH pool's reserves for a given token
+     * @param _tokenAddress The specified token address for the UniSwapV2Router02 to use for swapping
+     * @param _swapBack Boolean specifying whether the reserves are being swapped back to their original asset
+     */
+    function swapETHForToken(address _tokenAddress, bool _swapBack) external onlyOwner {
+        address[] memory path = new address[](2);
+        path[0] = UniswapV2Router02.WETH();
+        path[1] = _tokenAddress;
+
+        ValuePool storage valuePool = valuePools[address(this)];
+        uint256 _amount = address(this).balance();
+
+        if (_swapBack) {
+            require(valuePool.swapped, "ValueFeed::swapTokensforETH: Reserves intact; swapping not necessary");
+        } else {
+            require(!valuePool.swapped, "ValueFeed::swapTokensforETH: Reserves already in use");
+        }
+
+        emit Swap(path, _amount);
+
+        UniswapV2Router02.swapExactETHForTokens(_amount, 
+                                                UniswapV2Router02.getAmountsOut(_amount, path)[1], 
+                                                path, address(this), 
+                                                block.timestamp.add(15));
         valuePool.swapped = !_swapBack;
     }
 
