@@ -17,6 +17,8 @@ import "./governance/ValueToken.sol";
 contract ValueFeed is Ownable {
 
     using SafeMath for uint256;
+    using SafeMath for uint16;
+    using SafeMath for uint8;
 
     /**
      * @notice Info of each user
@@ -58,6 +60,8 @@ contract ValueFeed is Ownable {
     uint256 public rateOfDistribution;
     /// @notice A numerical representation of the entire behavioral state of the Value Feed
     uint16 public ebState = 150;
+    /// @notice The total amount of users in the entire value feed
+    uint256 public numberOfUsers;
     /// @notice The time in seconds at which the value feed is first put up. Used in order to know when to distribute rewards
     uint256 public startTime;
     /// @notice The total amount of monetary value in the entire value feed
@@ -104,6 +108,11 @@ contract ValueFeed is Ownable {
     function deposit(address _tokenAddress, uint256 _amount) public payable {
         ValuePool storage valuePool = valuePools[_tokenAddress];
         UserData storage user = userData[msg.sender];
+
+        if (user.totalAmount == 0) {
+            numberOfUsers = numberOfUsers.add(1);
+        }
+
         emit Deposit(msg.sender, _tokenAddress, _amount);
 
         user.totalAmount = user.totalAmount.add(_amount);
@@ -154,6 +163,39 @@ contract ValueFeed is Ownable {
         return user.rewardRate.mul(user.meritScore);
     }
 
+    function distibuteMerit(uint16 _nuance, 
+                            uint8 _voteForTrade, 
+                            uint8 _voteForWithdrawal, 
+                            address _user, 
+                            bool _aiVote, 
+                            bool _success, 
+                            bool _proposerForWithdrawal, 
+                            bool _proposerForTrade) public onlyOwner {
+        UserData storage user = userData[_user];
+        uint256 points;
+        
+        points = _aiVote ? (_voteForTrade == 1 ? 1 : 0) : (_voteForTrade == 0 ? 1 : 0);
+        points = _aiVote ? (_voteForWithdrawal == 1 ? points.add(1) : points) : (_voteForWithdrawal == 0 ? points.add(1) : points);
+        points = _proposerForTrade ? (_proposerForWithdrawal ? points.add(2) : points.add(1)) : (_proposerForWithdrawal ? points.add(1) : points);
+
+        points = points.mul(1e18);
+        points = _aiVote ? (_success ? points.add(_nuance.mul(1e16)) : points.sub(_nuance.mul(1e16))) : (_success ? points.sub(_nuance.mul(1e16)) : points.add(_nuance.mul(1e16)));
+
+        if (_aiVote) {
+            if (_voteForTrade == 1 || _voteForWithdrawal == 1) {
+                user.meritScore = user.meritScore.add(points);
+            } else {
+                user.meritScore = user.meritScore <= points ? 0 : user.meritScore.sub(points);
+            }
+        } else {
+            if (_voteForTrade == 1 || _voteForWithdrawal == 1) {
+                user.meritScore = user.meritScore <= points ? 0 : user.meritScore.sub(points);
+            } else {
+                user.meritScore = user.meritScore.add(points);
+            }
+        }
+    }
+
     /**
      * @notice Retrieves the amount of tokens belonging to a given user in a given value pool
      * @param _user ETH address of the specified user
@@ -182,13 +224,19 @@ contract ValueFeed is Ownable {
     function withdrawFromPool(address _tokenAddress, uint256 _amount) public {
         ValuePool storage valuePool = valuePools[_tokenAddress];
         UserData storage user = userData[msg.sender];
+
         require(valuePool.swapped, "ValueFeed::withdrawFromPool: Original assets currently in use");
         require(valuePool.userValue[msg.sender] >= _amount, "ValueFeed::withdrawFromPool:Insufficient funds.");
+
         emit Withdraw(msg.sender, _tokenAddress, _amount);
 
         user.totalAmount = user.totalAmount.sub(_amount);
         valuePool.totalValue = valuePool.totalValue.sub(_amount);
         valuePool.userValue[msg.sender] = valuePool.userValue[msg.sender].sub(_amount);
+
+        if (user.totalAmount == 0) {
+            numberOfUsers = numberOfUsers.sub(1);
+        }
     }
 
     /**
@@ -270,7 +318,9 @@ contract ValueFeed is Ownable {
 
         emit Swap(path, _amount);
 
-        UniswapV2Router02.swapExactTokensForETH(_amount, UniswapV2Router02.getAmountsOut(_amount, path)[1], path, address(this),
+        UniswapV2Router02.swapExactTokensForETH(_amount, 
+                                                UniswapV2Router02.getAmountsOut(_amount, path)[1], 
+                                                path, address(this), 
                                                 block.timestamp.add(15));
         valuePool.swapped = !_swapBack;
     }
@@ -291,8 +341,11 @@ contract ValueFeed is Ownable {
         }
         emit Swap(_path, _amount);
 
-        UniswapV2Router02.swapExactTokensForTokens(_amount, UniswapV2Router02.getAmountsOut(_amount, _path)[_path.length.sub(1)], 
-                                                  _path, address(this),block.timestamp.add(15));
+        UniswapV2Router02.swapExactTokensForTokens(_amount, 
+                                                   UniswapV2Router02.getAmountsOut(_amount, _path)[_path.length.sub(1)],
+                                                   _path, 
+                                                   address(this),
+                                                   block.timestamp.add(15));
         valuePool.swapped = !_swapBack;
     }
 
