@@ -318,11 +318,11 @@ contract ValueSenate is Ownable {
         require(proposal.timeOfExecution <= block.timestamp, "ValueSenate::executeTradeProposal: Timelock time has not passed yet");
         
         if (!_ethTrade) {
-            valueFeed.swapTokensForToken(_path, false);
+            valueFeed.swapTokensForToken(_path, proposal.withdrawal);
         } else if (_tokenForEth) {
-            valueFeed.swapTokensForETH(_path[0], false);
+            valueFeed.swapTokensForETH(_path[0], proposal.withdrawal);
         } else {
-            valueFeed.swapETHForToken(_path, false);
+            valueFeed.swapETHForToken(_path[0], proposal.withdrawal);
         }
 
         proposal.state = State.Executed;
@@ -346,7 +346,6 @@ contract ValueSenate is Ownable {
 
     }
 
-    
     /**
      * @notice Obtains the CHAIN_ID variable corresponding to the network the contract is deployed at
      * @return The chain ID for the current network this contract is deployed at

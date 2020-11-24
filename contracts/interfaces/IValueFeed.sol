@@ -23,6 +23,6 @@ interface IValueFeed {
 
     function swapTokensForETH(address _tokenAddress, bool _swapBack) external;
 
-    function swapETHforToken(address[] memory _path, bool _swapBack) external;
+    function swapETHForToken(address _tokenAddress, bool _swapBack) external;
 
 }

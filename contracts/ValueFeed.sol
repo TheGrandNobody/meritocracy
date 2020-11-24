@@ -28,7 +28,6 @@ contract ValueFeed is Ownable {
         uint256 meritScore;   // The score which determines the value that the user brings to the system
         uint256 lastReward;   // The amount of points last awarded to the user
         uint256 streak;       // The number of consecutive successful proposals made by the user (if applicable)
-        uint256 rewardRate;   // The cumulative reward rate used to calculate the amount of VALUE earned every four weeks
         uint256 totalAmount;  // The numerical total amount of tokens owned by a user (not the total value)
 
         bool firstTime;       // Indicates whether user is joining for the first time
@@ -40,7 +39,7 @@ contract ValueFeed is Ownable {
      */
     struct ValuePool {
         uint256 totalValue;                     // The total monetary value (not the token) in this pool
-        bool swapped;
+        bool swapped;                           // Determines whether the contents of the value pool are swapped or not
         mapping (address => uint256) userValue; // Each address in this pool
     }
 
@@ -109,6 +108,7 @@ contract ValueFeed is Ownable {
      */
     function deposit(address _tokenAddress, uint256 _amount) public payable {
         ValuePool storage valuePool = valuePools[_tokenAddress];
+        require(valuePool.swapped, "ValueFeed::deposit: Pool currently in use, can not deposit");
         UserData storage user = userData[msg.sender];
 
         if (!user.firstTime) {
@@ -166,39 +166,6 @@ contract ValueFeed is Ownable {
         return user.rewardRate.mul(user.meritScore);
     }
 
-    function distibuteMerit(uint16 _nuance, 
-                            uint8 _voteForTrade, 
-                            uint8 _voteForWithdrawal, 
-                            address _user, 
-                            bool _aiVote, 
-                            bool _success, 
-                            bool _proposerForWithdrawal, 
-                            bool _proposerForTrade) public onlyOwner {
-        UserData storage user = userData[_user];
-        uint256 points;
-        
-        points = _aiVote ? (_voteForTrade == 1 ? 1 : 0) : (_voteForTrade == 0 ? 1 : 0);
-        points = _aiVote ? (_voteForWithdrawal == 1 ? points.add(1) : points) : (_voteForWithdrawal == 0 ? points.add(1) : points);
-        points = _proposerForTrade ? (_proposerForWithdrawal ? points.add(2) : points.add(1)) : (_proposerForWithdrawal ? points.add(1) : points);
-
-        points = points.mul(1e18);
-        points = _aiVote ? (_success ? points.add(_nuance.mul(1e16)) : points.sub(_nuance.mul(1e16))) : (_success ? points.sub(_nuance.mul(1e16)) : points.add(_nuance.mul(1e16)));
-
-        if (_aiVote) {
-            if (_voteForTrade == 1 || _voteForWithdrawal == 1) {
-                user.meritScore = user.meritScore.add(points);
-            } else {
-                user.meritScore = user.meritScore <= points ? 0 : user.meritScore.sub(points);
-            }
-        } else {
-            if (_voteForTrade == 1 || _voteForWithdrawal == 1) {
-                user.meritScore = user.meritScore <= points ? 0 : user.meritScore.sub(points);
-            } else {
-                user.meritScore = user.meritScore.add(points);
-            }
-        }
-    }
-
     /**
      * @notice Retrieves the amount of tokens belonging to a given user in a given value pool
      * @param _user ETH address of the specified user
@@ -228,7 +195,7 @@ contract ValueFeed is Ownable {
         ValuePool storage valuePool = valuePools[_tokenAddress];
         UserData storage user = userData[msg.sender];
 
-        require(valuePool.swapped, "ValueFeed::withdrawFromPool: Original assets currently in use");
+        require(!valuePool.swapped, "ValueFeed::withdrawFromPool: Original assets currently in use");
         require(valuePool.userValue[msg.sender] >= _amount, "ValueFeed::withdrawFromPool:Insufficient funds.");
 
         emit Withdraw(msg.sender, _tokenAddress, _amount);
@@ -252,6 +219,51 @@ contract ValueFeed is Ownable {
                 withdrawFromPool(tokens[i], valuePool.userValue[msg.sender]);
             }
         }
+    }
+
+    function distibuteMerit(uint16 _nuance, 
+                            uint8 _voteForTrade, 
+                            uint8 _voteForWithdrawal, 
+                            address _user, 
+                            bool _aiVote, 
+                            bool _success, 
+                            bool _proposerForWithdrawal, 
+                            bool _proposerForTrade) public onlyOwner {
+        UserData storage user = userData[_user];
+        uint256 points;
+        
+        points = _aiVote ? (_voteForTrade == 1 ? 1 : 0) : (_voteForTrade == 0 ? 1 : 0);
+        points = _aiVote ? (_voteForWithdrawal == 1 ? points.add(1) : points) : (_voteForWithdrawal == 0 ? points.add(1) : points);
+        points = _proposerForTrade ? (_proposerForWithdrawal ? points.add(2) : points.add(1)) : (_proposerForWithdrawal ? points.add(1) : points);
+
+        points = points.mul(1e18);
+        points = _aiVote ? (_success ? points.add(_nuance.mul(1e16)) : points.sub(_nuance.mul(1e16))) : (_success ? points.sub(_nuance.mul(1e16)) : points.add(_nuance.mul(1e16)));
+
+        if (_aiVote) {
+            if (_voteForTrade == 1 || _voteForWithdrawal == 1) {
+                user.meritScore = user.meritScore.add(points);
+                user.lastReward = points;
+            } else {
+                user.meritScore = user.meritScore <= points ? 0 : user.meritScore.sub(points);
+            }
+        } else {
+            if (_voteForTrade == 1 || _voteForWithdrawal == 1) {
+                user.meritScore = user.meritScore <= points ? 0 : user.meritScore.sub(points);
+            } else {
+                user.meritScore = user.meritScore.add(points);
+                user.lastReward = points;
+            }
+        }
+
+        user.streak =  ((_proposerForTrade || _proposerForWithdrawal) && _aiVote) ? user.streak.add(1) : 0;
+    }
+
+    function distributeReward(address _user) external onlyOwner {
+        UserData storage user = userData[_user];
+        uint256 reward = user.meritScore
+
+        
+
     }
 
     /**
@@ -318,14 +330,13 @@ contract ValueFeed is Ownable {
         } else {
             require(!valuePool.swapped, "ValueFeed::swapTokensforETH: Reserves already in use");
         }
-
+        valuePool.swapped = !_swapBack;
         emit Swap(path, _amount);
 
         UniswapV2Router02.swapExactTokensForETH(_amount, 
                                                 UniswapV2Router02.getAmountsOut(_amount, path)[1], 
                                                 path, address(this), 
                                                 block.timestamp.add(15));
-        valuePool.swapped = !_swapBack;
     }
 
     /**
@@ -342,6 +353,7 @@ contract ValueFeed is Ownable {
         } else {
             require(!valuePool.swapped, "ValueFeed::swapTokensforToken: Reserves already in use");
         }
+        valuePool.swapped = !_swapBack;
         emit Swap(_path, _amount);
 
         UniswapV2Router02.swapExactTokensForTokens(_amount, 
@@ -349,7 +361,6 @@ contract ValueFeed is Ownable {
                                                    _path, 
                                                    address(this),
                                                    block.timestamp.add(15));
-        valuePool.swapped = !_swapBack;
     }
 
     /**
@@ -363,21 +374,19 @@ contract ValueFeed is Ownable {
         path[1] = _tokenAddress;
 
         ValuePool storage valuePool = valuePools[address(this)];
-        uint256 _amount = address(this).balance();
+        uint256 _amount = address(this).balance;
 
         if (_swapBack) {
             require(valuePool.swapped, "ValueFeed::swapTokensforETH: Reserves intact; swapping not necessary");
         } else {
             require(!valuePool.swapped, "ValueFeed::swapTokensforETH: Reserves already in use");
         }
-
+        valuePool.swapped = !_swapBack;
         emit Swap(path, _amount);
 
-        UniswapV2Router02.swapExactETHForTokens(_amount, 
-                                                UniswapV2Router02.getAmountsOut(_amount, path)[1], 
+        UniswapV2Router02.swapExactETHForTokens{value : _amount}(UniswapV2Router02.getAmountsOut(_amount, path)[1], 
                                                 path, address(this), 
                                                 block.timestamp.add(15));
-        valuePool.swapped = !_swapBack;
     }
 
     /**
