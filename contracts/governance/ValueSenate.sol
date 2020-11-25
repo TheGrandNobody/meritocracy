@@ -127,11 +127,17 @@ contract ValueSenate is Ownable {
     uint256 public lastTradeId;
 
     /**
+     * @notice Keeps track of the total amount of trade proposals for the current quadri-weekly period of trading
+     */
+    uint256 public tradeProposalCount;
+
+    /**
      * @notice Integer for atomic increase (keeps tracks of the latest success proposal ID)
      */
     uint256 public lastSuccessId;
 
     event Voted(address indexed voter, uint256 id, bool pro);
+    event TradeProposalRequested(address proposer, address valuePool, address targetAsset, bool second);
     event TradeProposalInitiated(uint256 id, address indexed proposer, address indexed valuePool, address indexed targetAsset, uint256 startTime, uint256 endTime, bool second);
     event TradeProposalFinalized(uint256 id, uint256 time, bool passed);
     event TradeWithdrawal(uint256 id);
@@ -145,15 +151,28 @@ contract ValueSenate is Ownable {
     bytes32 public constant VOTE_STRUCT_TYPEHASH = keccak256("Vote(address voter, uint256 id, bool pro, Proposal type)");
 
     /**
-     * @notice Initiates a trade proposal by a given user so as to trade the asset of a value pool for a target asset
+     * @notice Initiates a trade proposal request to the A.I to check whether the limit is reached or not
      * @param _proposer The ETH address of the specified user making the proposal
      * @param _valuePool The ERC20 address of the asset belonging to the specified value pool
      * @param _targetAsset The ERC20 address of the specified target token for which the value pool's contents will be traded
      * @param _second Determines whether this is the first (trade for) or second (trade back for) round of the proposal
      */
-    function proposeTrade(address _proposer, address _valuePool, address _targetAsset, bool _second) external  {
-        require(valueFeed.viewMeritScore(_proposer) + value.viewDelegateVotes(_proposer) >= 4e5, "ValueSenate::proposeTrade: User is not competent enough to propose"); 
-        require(valueFeed.viewSwapped(_valuePool) == _second, "ValueSenate::proposeTrade: Value Pool is not in the right state");
+    function proposeTrade(address _proposer, address _valuePool, address _targetAsset, bool _second) public {
+        emit TradeProposalRequested(_proposer, _valuePool, _targetAsset, _second);
+    }
+
+    /**
+     * @notice Initiates a trade proposal by a given user so as to trade the asset of a value pool for a target asset
+     * @param _proposer The ETH address of the specified user making the proposal
+     * @param _valuePool The ERC20 address of the asset belonging to the specified value pool
+     * @param _targetAsset The ERC20 address of the specified target token for which the value pool's contents will be traded
+     * @param _second Determines whether this is the first (trade for) or second (trade back for) round of the proposal
+     * @param _limitReached Determines whether the limit of trade proposals has been reached or not
+     */
+    function _proposeTrade(address _proposer, address _valuePool, address _targetAsset, bool _second, bool _limitReached) external onlyOwner  {
+        require(!_limitReached, "ValueSenate::_proposeTrade:The total limit of proposals allowed this month is reached");
+        require(valueFeed.viewMeritScore(_proposer) + value.viewDelegateVotes(_proposer) >= 4e5, "ValueSenate::_proposeTrade: User is not competent enough to propose"); 
+        require(valueFeed.viewSwapped(_valuePool) == _second, "ValueSenate::_proposeTrade: Value Pool is not in the right state");
 
         TradeProposal storage proposal = tradeProposals[lastTradeId];
         proposal.id = lastTradeId;
@@ -174,6 +193,12 @@ contract ValueSenate is Ownable {
         emit TradeProposalInitiated(proposal.id, _proposer, _valuePool, _targetAsset, proposal.startTime, proposal.endTime, _second);
     }
 
+    /**
+     * @notice Initiates a success proposal for a given trade proposal and its corresponding withdrawal proposal
+     * @param _tradeId The specified id of the trade proposal
+     * @param _withdrawalId The specified id of the withdrawal proposal
+     * @param _internalEval The A.I's ruling on whether this was a successful proposal or not
+     */
     function proposeEvaluation(uint256 _tradeId, uint256 _withdrawalId, bool _internalEval) public onlyOwner {
         SuccessProposal storage proposal = successProposals[lastSuccessId];
 
@@ -188,6 +213,13 @@ contract ValueSenate is Ownable {
         proposal.state = State.InProgress;
 
         emit SuccessProposalInitiated(proposal.id, proposal.startTime, proposal.endTime);
+    }
+
+    /**
+     * Resets the count of trade proposals
+     */
+    function resetProposalCount() external onlyOwner {
+        tradeProposalCount = 0;
     }
 
     /**
@@ -296,6 +328,10 @@ contract ValueSenate is Ownable {
         emit Voted(_voter, _id, _pro);
     }
     
+    /**
+     * @notice Tallies all trade votes for a given proposal
+     * @param _id The id of the specified trade proposal
+     */
     function tallyTradeVote(uint256 _id) external {
         TradeProposal storage proposal = tradeProposals[_id];
         require(proposal.endTime <= block.timestamp, "ValueSenate::tallyTradeVote: Proposal still under voting period");
@@ -311,15 +347,20 @@ contract ValueSenate is Ownable {
         emit TradeProposalFinalized(_id, timeOfExecution, percentageFor > percentageAgainst);
     }
 
-
-    function executeTradeProposal(uint256 _id, address[] memory _path, bool _ethTrade, bool _tokenForEth) public {
+    /**
+     * @notice Executes a given trade proposal
+     * @param _id The id of the specified trade proposal
+     * @param _path The path the token must take for this swap (only contains the target asset contract for ETH trades)
+     * @param _swap Determines the type of swap to perform
+     */
+    function executeTradeProposal(uint256 _id, address[] memory _path, uint8 _swap) public {
         TradeProposal storage proposal = tradeProposals[_id];
         require(proposal.state == State.Passed, "ValueSenate::executeTradeProposal: Proposal was not passed");
         require(proposal.timeOfExecution <= block.timestamp, "ValueSenate::executeTradeProposal: Timelock time has not passed yet");
         
-        if (!_ethTrade) {
+        if (_swap == 1) {
             valueFeed.swapTokensForToken(_path, proposal.withdrawal);
-        } else if (_tokenForEth) {
+        } else if (_swap == 2) {
             valueFeed.swapTokensForETH(_path[0], proposal.withdrawal);
         } else {
             valueFeed.swapETHForToken(_path[0], proposal.withdrawal);
@@ -332,6 +373,10 @@ contract ValueSenate is Ownable {
         }
     }
 
+    /**
+     * @notice Tallies the votes for a given success proposal (counts the voters' degree of success)
+     * @param _id The id of the specified success proposal
+     */
     function evaluate(uint256 _id) public onlyOwner {
         SuccessProposal storage proposal = successProposals[_id];
         require(proposal.endTime <= block.timestamp, "ValueSenate::evaluate: Success evaluation still ongoing");

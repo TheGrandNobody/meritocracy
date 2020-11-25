@@ -24,13 +24,14 @@ contract ValueFeed is Ownable {
      * @notice Info of each user
      */
     struct UserData {
-        uint256 inProgress;   // The amount of tokens owed by the value feed to the user (rewarded every four weeks)
-        uint256 meritScore;   // The score which determines the value that the user brings to the system
-        uint256 lastReward;   // The amount of points last awarded to the user
-        uint256 streak;       // The number of consecutive successful proposals made by the user (if applicable)
-        uint256 totalAmount;  // The numerical total amount of tokens owned by a user (not the total value)
+        uint256 inProgress;    // The amount of tokens owed by the value feed to the user (rewarded every four weeks)
+        uint256 meritScore;    // The score which determines the value that the user brings to the system
+        uint256 lastReward;    // The amount of points last awarded to the user
+        uint256 valueStreak;   // The number of consecutive successful proposals made by the user
+        uint256 unvalueStreak; // The number of consecutive unsuccessful proposals made by the user
+        uint256 totalAmount;   // The numerical total amount of tokens owned by a user (not the total value)
 
-        bool firstTime;       // Indicates whether user is joining for the first time
+        bool firstTime;        // Indicates whether user is joining for the first time
     }
 
     
@@ -75,10 +76,13 @@ contract ValueFeed is Ownable {
     /// @notice Contains each token address for which a value pool was created
     address[] public tokens;
 
-
+    event DepositRequest(address user, address token, uint256 amount);
     event Deposit(address indexed user, address indexed token, uint256 amount);
+    event WithdrawalRequest(address user, address token, uint256 amount);
     event Withdraw(address indexed user, address indexed token, uint256 amount);
     event Swap(address[] indexed tokens, uint256 amount);
+    event Merit(address indexed user, uint256 scoreAdded, uint256 time);
+    event Reward(address indexed user, uint256 reward, uint256 time);
 
     /**
      * @notice Constructor: initiates the value feed smart contract
@@ -88,7 +92,8 @@ contract ValueFeed is Ownable {
         value = _value;
         dev = msg.sender;
         startTime = block.timestamp;
-        rateOfDistribution = MAX_DISTRIBUTION_RATE.div(2);
+        rateOfDistribution = MAX_DISTRIBUTION_RATE.div(20);
+        rateOfCollection = MAX_COLLECTION_RATE.div(20);
         UniswapV2Router02 = IUniswapV2Router02(UNISWAP_ROUTER_ADDRESS);
     }
 
@@ -102,21 +107,32 @@ contract ValueFeed is Ownable {
     }
 
     /**
-     * @notice Deposits a given amount of tokens to a value pool
+     * @notice Initiates a deposit request to the A.I for a given amount of tokens to a given value pool
      * @param _tokenAddress The address of the value pool's token's contract
      * @param _amount The specified amount of tokens being deposited
      */
-    function deposit(address _tokenAddress, uint256 _amount) public payable {
+    function deposit(address _tokenAddress, uint256 _amount) external {
+        emit DepositRequest(msg.sender, _tokenAddress, _amount);
+    }
+
+    /**
+     * @notice Deposits a given amount of tokens to a value pool for a given user
+     * @param _user The ETH address of the given user
+     * @param _tokenAddress The address of the value pool's token's contract
+     * @param _amount The specified amount of tokens being deposited
+     * @param _hasVoted Whether the user has voted on a proposal for this pool or not
+     */
+    function _deposit(address _user, address _tokenAddress, uint256 _amount, bool _hasVoted) public onlyOwner {
         ValuePool storage valuePool = valuePools[_tokenAddress];
-        require(valuePool.swapped, "ValueFeed::deposit: Pool currently in use, can not deposit");
-        UserData storage user = userData[msg.sender];
+        require(!_hasVoted, "ValueFeed::deposit: Pool currently in use, can not deposit");
+        UserData storage user = userData[_user];
 
         if (!user.firstTime) {
             numberOfUsers = numberOfUsers.add(1);
             user.firstTime = true;
         }
 
-        emit Deposit(msg.sender, _tokenAddress, _amount);
+        emit Deposit(_user, _tokenAddress, _amount);
 
         user.totalAmount = user.totalAmount.add(_amount);
         valuePool.totalValue = valuePool.totalValue.add(_amount);
@@ -146,27 +162,6 @@ contract ValueFeed is Ownable {
     }
 
     /**
-     * @notice Retrieves the quadri-weekly reward rate of a given user
-     * @dev Mainly for frontend usage
-     * @param _user ETH address of the specified user
-     * @return The cumulative reward rate of the user
-     */
-    function viewRate(address _user) external view returns (uint256) {
-        UserData storage user = userData[_user];
-        return user.rewardRate;
-    }
-
-    /**
-     * @notice Calculates the (total) reward for a given user address
-     * @param _user ETH address of the specified user
-     * @return The total reward in VALUE owed to the user
-     */
-    function calculateReward(address _user) external view returns (uint256) {
-        UserData storage user = userData[_user];
-        return user.rewardRate.mul(user.meritScore);
-    }
-
-    /**
      * @notice Retrieves the amount of tokens belonging to a given user in a given value pool
      * @param _user ETH address of the specified user
      * @param _tokenAddress The address of the specified ERC20 token contract of this value pool
@@ -187,22 +182,33 @@ contract ValueFeed is Ownable {
     }
 
     /**
-     * @notice Withdraws a given amount from a given value pool
+     * @notice Initiates a withdrawal request to the A.I to check whether the user 
      * @param _tokenAddress The address of the specified token contract
      * @param _amount The amount of tokens being withdrawn
      */
     function withdrawFromPool(address _tokenAddress, uint256 _amount) public {
+        emit WithdrawalRequest(msg.sender, _tokenAddress, _amount);
+    }
+
+    /**
+     * @notice Withdraws a given amount from a given value pool for a given user
+     * @param _user The ETH address of the specified user
+     * @param _tokenAddress The address of the specified token contract
+     * @param _amount The amount of tokens being withdrawn
+     * @param _hasVoted Whether the user has voted on a proposal for this pool or not
+     */
+    function _withdrawFromPool(address _user, address _tokenAddress, uint256 _amount, bool _hasVoted) public onlyOwner {
         ValuePool storage valuePool = valuePools[_tokenAddress];
-        UserData storage user = userData[msg.sender];
+        UserData storage user = userData[_user];
 
-        require(!valuePool.swapped, "ValueFeed::withdrawFromPool: Original assets currently in use");
-        require(valuePool.userValue[msg.sender] >= _amount, "ValueFeed::withdrawFromPool:Insufficient funds.");
+        require(!_hasVoted, "ValueFeed::withdrawFromPool: Original assets currently in use");
+        require(valuePool.userValue[_user] >= _amount, "ValueFeed::withdrawFromPool:Insufficient funds.");
 
-        emit Withdraw(msg.sender, _tokenAddress, _amount);
+        emit Withdraw(_user, _tokenAddress, _amount);
 
         user.totalAmount = user.totalAmount.sub(_amount);
         valuePool.totalValue = valuePool.totalValue.sub(_amount);
-        valuePool.userValue[msg.sender] = valuePool.userValue[msg.sender].sub(_amount);
+        valuePool.userValue[_user] = valuePool.userValue[_user].sub(_amount);
 
         if (user.totalAmount == 0) {
             numberOfUsers = numberOfUsers.sub(1);
@@ -216,19 +222,30 @@ contract ValueFeed is Ownable {
         for (uint256 i = 0; i < tokens.length; i++) {
             ValuePool storage valuePool = valuePools[tokens[i]];
             if (valuePool.userValue[msg.sender] > 0) {
-                withdrawFromPool(tokens[i], valuePool.userValue[msg.sender]);
+                emit WithdrawalRequest(msg.sender, tokens[i], valuePool.userValue[msg.sender]);
             }
         }
     }
 
+    /**
+     * @notice Updates the merit score of a given user for a finalized proposal
+     * @param _nuance The degree to which the proposal was (un)successful
+     * @param _voteForTrade Whether the user participated in the first voting phase and his choice
+     * @param _voteForWithdrawal Whether the user participated in the second voting phase and his choice
+     * @param _user The ETH address of the specified user
+     * @param _aiVote The A.I's ruling on whether this was a successful proposal
+     * @param _success The voters' ruling on whether this was a successful proposal
+     * @param _proposerForTrade Whether the user is the proposer for the initial trade proposal
+     * @param _proposerForWithdrawal Whether the user is the proposer for the withdrawal proposal
+     */
     function distibuteMerit(uint16 _nuance, 
                             uint8 _voteForTrade, 
                             uint8 _voteForWithdrawal, 
                             address _user, 
                             bool _aiVote, 
                             bool _success, 
-                            bool _proposerForWithdrawal, 
-                            bool _proposerForTrade) public onlyOwner {
+                            bool _proposerForTrade,                            
+                            bool _proposerForWithdrawal) public onlyOwner {
         UserData storage user = userData[_user];
         uint256 points;
         
@@ -237,6 +254,8 @@ contract ValueFeed is Ownable {
         points = _proposerForTrade ? (_proposerForWithdrawal ? points.add(2) : points.add(1)) : (_proposerForWithdrawal ? points.add(1) : points);
 
         points = points.mul(1e18);
+        points = points.add(user.valueStreak.mul(1.5e18));
+        points = points.sub(user.unvalueStreak.mul(1.5e18));
         points = _aiVote ? (_success ? points.add(_nuance.mul(1e16)) : points.sub(_nuance.mul(1e16))) : (_success ? points.sub(_nuance.mul(1e16)) : points.add(_nuance.mul(1e16)));
 
         if (_aiVote) {
@@ -254,16 +273,22 @@ contract ValueFeed is Ownable {
                 user.lastReward = points;
             }
         }
-
-        user.streak =  ((_proposerForTrade || _proposerForWithdrawal) && _aiVote) ? user.streak.add(1) : 0;
+        emit Merit(_user, points, block.timestamp);
+        user.valueStreak =  ((_proposerForTrade || _proposerForWithdrawal) && _aiVote) ? user.valueStreak.add(1) : 0;
+        user.unvalueStreak =  ((_proposerForTrade || _proposerForWithdrawal) && _aiVote) ? 0 : user.unvalueStreak.add(1);
     }
 
-    function distributeReward(address _user) external onlyOwner {
+    /**
+     * @notice Distributes the quadri-weekly reward for a given user
+     * @param _user The ETH address of the specified user
+     * @param _totalMerit The total amount of merit in the entire Value Feed
+     */
+    function distributeReward(address _user, uint256 _totalMerit) external onlyOwner {
         UserData storage user = userData[_user];
-        uint256 reward = user.meritScore
+        uint256 trueRateOfDistribution = rateOfDistribution.sub(rateOfCollection);
+        uint256 reward = user.meritScore.mul(trueRateOfDistribution.div(_totalMerit));
 
-        
-
+        emit Reward(_user, reward, block.timestamp);
     }
 
     /**
