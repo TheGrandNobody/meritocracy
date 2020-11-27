@@ -116,6 +116,22 @@ contract ValueFeed is Ownable {
     }
 
     /**
+     * @notice Initiates a deposit request to the A.I for a given amount of ETH
+     */
+    function deposit() external payable {
+        emit DepositRequest(msg.sender, address(this), msg.value);
+    }
+
+    /**
+     * @notice Initiates a refund for a given amount of ETH to a given user address
+     * @param _user The ETH address of the specified user
+     * @param _amount The amount of ETH being sent back to the user
+     */
+    function refund(address payable _user, uint256 _amount) external onlyOwner {
+        _user.transfer(_amount);
+    }
+
+    /**
      * @notice Deposits a given amount of tokens to a value pool for a given user
      * @param _user The ETH address of the given user
      * @param _tokenAddress The address of the value pool's token's contract
@@ -123,8 +139,8 @@ contract ValueFeed is Ownable {
      * @param _hasVoted Whether the user has voted on a proposal for this pool or not
      */
     function _deposit(address _user, address _tokenAddress, uint256 _amount, bool _hasVoted) public onlyOwner {
-        ValuePool storage valuePool = valuePools[_tokenAddress];
         require(!_hasVoted, "ValueFeed::deposit: Pool currently in use, can not deposit");
+        ValuePool storage valuePool = valuePools[_tokenAddress];
         UserData storage user = userData[_user];
 
         if (!user.firstTime) {
@@ -197,14 +213,17 @@ contract ValueFeed is Ownable {
      * @param _amount The amount of tokens being withdrawn
      * @param _hasVoted Whether the user has voted on a proposal for this pool or not
      */
-    function _withdrawFromPool(address _user, address _tokenAddress, uint256 _amount, bool _hasVoted) public onlyOwner {
+    function _withdrawFromPool(address payable _user, address _tokenAddress, uint256 _amount, bool _hasVoted) public onlyOwner {
+        require(!_hasVoted, "ValueFeed::withdrawFromPool: Original assets currently in use");
         ValuePool storage valuePool = valuePools[_tokenAddress];
         UserData storage user = userData[_user];
-
-        require(!_hasVoted, "ValueFeed::withdrawFromPool: Original assets currently in use");
         require(valuePool.userValue[_user] >= _amount, "ValueFeed::withdrawFromPool:Insufficient funds.");
 
         emit Withdraw(_user, _tokenAddress, _amount);
+
+        if (_tokenAddress == address(this)) {
+            _user.transfer(_amount);
+        }
 
         user.totalAmount = user.totalAmount.sub(_amount);
         valuePool.totalValue = valuePool.totalValue.sub(_amount);
