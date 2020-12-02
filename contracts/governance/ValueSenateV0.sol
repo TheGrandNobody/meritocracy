@@ -1,4 +1,5 @@
 pragma solidity 0.7.0;
+pragma experimental ABIEncoderV2;
 
 import "../interfaces/IValueFeed.sol";
 import "../interfaces/IValueToken.sol";
@@ -14,7 +15,7 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
  * https://github.com/compound-finance/compound-protocol/blob/master/contracts/Governance/Comp.sol.
  * Credits are given/written accordingly.
  */
-contract ValueSenate is Ownable {
+contract ValueSenateV0 is Ownable {
 
     using SafeMath for uint256;
 

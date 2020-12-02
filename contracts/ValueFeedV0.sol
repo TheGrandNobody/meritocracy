@@ -34,7 +34,6 @@ contract ValueFeed is Ownable {
         bool firstTime;        // Indicates whether user is joining for the first time
     }
 
-    
     /**
      * @notice Info of each pool
      */
