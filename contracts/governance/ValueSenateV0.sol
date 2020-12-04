@@ -1,11 +1,25 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) <2020> <Open Zeppelin>
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+/*Copyright 2020 Compound Labs, Inc.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
 pragma solidity 0.7.0;
 pragma experimental ABIEncoderV2;
 
 import "../interfaces/IValueFeed.sol";
 import "../interfaces/IValueToken.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
-
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/math/SafeMathUpgradeable.sol";
 
 /**
  * @title A contract for the Value Senate
@@ -15,9 +29,9 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
  * https://github.com/compound-finance/compound-protocol/blob/master/contracts/Governance/Comp.sol.
  * Credits are given/written accordingly.
  */
-contract ValueSenateV0 is Ownable {
+contract ValueSenateV0 is OwnableUpgradeable {
 
-    using SafeMath for uint256;
+    using SafeMathUpgradeable for uint256;
 
     IValueFeed public valueFeed;
     IValueToken public value;
@@ -27,7 +41,7 @@ contract ValueSenateV0 is Ownable {
      * @param _valueFeed Address of the Value Feed contract
      * @param _valueToken Address of the Value token contract
      */
-    constructor(address _valueFeed, address _valueToken) {
+    function initialize(address _valueFeed, address _valueToken) internal initializer {
         valueFeed = IValueFeed(_valueFeed);
         value = IValueToken(_valueToken);
     }
@@ -299,7 +313,7 @@ contract ValueSenateV0 is Ownable {
              && (endTime > block.timestamp), "ValueSenate::_voteOnTradeProposal: Proposal is not in state for voting");
         require(valueFeed.viewTotalAmount(_voter) > 0, "ValueSenate::_voteOnTradeProposal: User is not a contributor to the Value Feed");
         require(!voted, "ValueSenate::_voteOnTradeProposal: User has already voted");
-        require(value.viewDelegate(_voter) == _voter, "ValueSenate::_voteOnTradeProposal");
+        require(value.viewDelegate(_voter) == _voter, "ValueSenate::_voteOnTradeProposal: User has delegated his votes");
 
         uint256 numberOfVotes = valueFeed.viewMeritScore(_voter).add(value.viewDelegateVotes(_voter));
 

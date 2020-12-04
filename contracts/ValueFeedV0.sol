@@ -1,8 +1,8 @@
 pragma solidity 0.7.0;
 
-import "@openzeppelin/contracts/math/SafeMath.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/math/SafeMathUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "./governance/ValueToken.sol";
 
@@ -14,11 +14,11 @@ import "./governance/ValueToken.sol";
  * @dev Ownable so that later on it can be sent to a governance smart contract.
  * (This will only be done once VALUE has enough holders, so much so that an ecosystem has been created (>1000 users)
  */
-contract ValueFeed is Ownable {
+contract ValueFeed is OwnableUpgradeable {
 
-    using SafeMath for uint256;
-    using SafeMath for uint16;
-    using SafeMath for uint8;
+    using SafeMathUpgradeable for uint256;
+    using SafeMathUpgradeable for uint16;
+    using SafeMathUpgradeable for uint8;
 
     /**
      * @notice Info of each user
@@ -80,14 +80,14 @@ contract ValueFeed is Ownable {
     event WithdrawalRequest(address user, address token, uint256 amount);
     event Withdraw(address indexed user, address indexed token, uint256 amount);
     event Swap(address[] indexed tokens, uint256 amount);
-    event Merit(address indexed user, uint256 scoreAdded, uint256 time);
+    event Merit(address indexed user, bool delegate, uint256 scoreAdded, uint256 time);
     event Reward(address indexed user, uint256 reward, uint256 time);
 
     /**
      * @notice Constructor: initiates the value feed smart contract
      * @param _value The value token
      */
-    constructor(ValueToken _value) {
+    function initialize(ValueToken _value) internal initializer{
         value = _value;
         dev = msg.sender;
         startTime = block.timestamp;
@@ -213,7 +213,7 @@ contract ValueFeed is Ownable {
      * @param _hasVoted Whether the user has voted on a proposal for this pool or not
      */
     function _withdrawFromPool(address payable _user, address _tokenAddress, uint256 _amount, bool _hasVoted) public onlyOwner {
-        require(!_hasVoted, "ValueFeed::withdrawFromPool: Original assets currently in use");
+        require(!_hasVoted && value.viewDelegate(_user) == _user, "ValueFeed::withdrawFromPool: Assets currently in use");
         ValuePool storage valuePool = valuePools[_tokenAddress];
         UserData storage user = userData[_user];
         require(valuePool.userValue[_user] >= _amount, "ValueFeed::withdrawFromPool:Insufficient funds.");
@@ -244,7 +244,7 @@ contract ValueFeed is Ownable {
             }
         }
     }
-
+    
     /**
      * @notice Updates the merit score of a given user for a finalized proposal
      * @param _nuance The degree to which the proposal was (un)successful
@@ -256,7 +256,7 @@ contract ValueFeed is Ownable {
      * @param _proposerForTrade Whether the user is the proposer for the initial trade proposal
      * @param _proposerForWithdrawal Whether the user is the proposer for the withdrawal proposal
      */
-    function distibuteMerit(uint16 _nuance, 
+    function distibuteIndividualMerit(uint16 _nuance, 
                             uint8 _voteForTrade, 
                             uint8 _voteForWithdrawal, 
                             address _user, 
@@ -266,6 +266,7 @@ contract ValueFeed is Ownable {
                             bool _proposerForWithdrawal) public onlyOwner {
         UserData storage user = userData[_user];
         uint256 points;
+        bool delegate;
         
         points = _aiVote ? (_voteForTrade == 1 ? 1 : 0) : (_voteForTrade == 0 ? 1 : 0);
         points = _aiVote ? (_voteForWithdrawal == 1 ? points.add(1) : points) : (_voteForWithdrawal == 0 ? points.add(1) : points);
@@ -275,6 +276,11 @@ contract ValueFeed is Ownable {
         points = points.add(user.valueStreak.mul(1.5e18));
         points = points.sub(user.unvalueStreak.mul(1.5e18));
         points = _aiVote ? (_success ? points.add(_nuance.mul(1e16)) : points.sub(_nuance.mul(1e16))) : (_success ? points.sub(_nuance.mul(1e16)) : points.add(_nuance.mul(1e16)));
+
+        if (value.viewDelegateVotes(_user) != 0) {
+            delegate = true;
+            points = points.mul(3).div(4);
+        }
 
         if (_aiVote) {
             if (_voteForTrade == 1 || _voteForWithdrawal == 1) {
@@ -291,9 +297,11 @@ contract ValueFeed is Ownable {
                 user.lastReward = points;
             }
         }
-        emit Merit(_user, points, block.timestamp);
+        
         user.valueStreak =  ((_proposerForTrade || _proposerForWithdrawal) && _aiVote) ? user.valueStreak.add(1) : 0;
         user.unvalueStreak =  ((_proposerForTrade || _proposerForWithdrawal) && _aiVote) ? 0 : user.unvalueStreak.add(1);
+
+        emit Merit(_user, delegate, points, block.timestamp);
     }
 
     /**
